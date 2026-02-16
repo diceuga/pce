@@ -1,0 +1,25 @@
+{
+  "bgpls": {
+    "router_id": "100.64.89.2",
+    "listen": "0.0.0.0",
+    "port": 179,
+    "peers": [
+      { "name": "peer1",
+        "address": "100.64.89.101",
+	"remote_as": 65000,
+	"priority": 100
+      },
+      { "name": "peer2",
+        "address": "100.127.0.102",
+	"remote_as": 65000,
+	"priority": 90
+      },
+      { "name": "peer3",
+        "address": "100.127.0.103",
+	"remote_as": 65000,
+	"priority": 80
+      }
+    ]
+  }
+}
+

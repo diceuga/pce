@@ -1,0 +1,6 @@
+{
+  "const" : {
+    "0"  : { "desc": "default IGP",  "metric": "IGP" },
+    "1"  : { "desc": "default TE",   "metric": "TE" }
+  }
+}

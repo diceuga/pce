@@ -1,0 +1,61 @@
+name: vevotest
+
+mgmt:
+  network: custom-mgmt
+  ipv4-subnet: 100.127.255.0/24
+
+topology:
+  #defaults:
+  #  env:
+  #    INTFTYPE: et
+  kinds:
+    #  nokia_srlinux:
+    #  image: ghcr.io/nokia/srlinux 
+    juniper_vjunosevolved:
+      image: vrnetlab/juniper_vjunosevolved:25.4R1.13-EVO
+  nodes:
+    v101:
+      kind: juniper_vjunosevolved
+      #startup-config: ./c101.cfg
+      mgmt-ipv4: 100.127.255.101
+        #cpu: 1
+        # env:
+        #CPTX_COSIM: "BX"
+        #c102:
+        #kind: juniper_vjunosevolved
+        #startup-config: ./c102.cfg
+        #mgmt-ipv4: 100.127.255.102
+        #env:
+        #CPTX_COSIM: "BX"
+        #c103:
+        #kind: juniper_cjunosevolved
+        #startup-config: ./c103.cfg
+        #mgmt-ipv4: 100.127.255.103
+        #env:
+        #CPTX_COSIM: "BX"
+        #c104:
+        #kind: juniper_cjunosevolved
+        #startup-config: ./c104.cfg
+        #mgmt-ipv4: 100.127.255.104
+        #env:
+        #CPTX_COSIM: "BX"
+  links:
+    - endpoints: ["v101:eth1", "v101:eth2"]
+    - endpoints: ["v101:eth3", "v101:eth4"]
+    - endpoints: ["v101:eth5", "v101:eth6"]
+    - type: macvlan
+      endpoint:
+        node: v101
+        interface: eth10
+      host-interface: ens192
+      mode: passthru
+      # - type: macvlan
+      #endpoint:
+      #  node: srl03
+      #  interface: e1-1
+      #host-interface: eth5
+      #mode: passthru
+
+
+##############S
+
