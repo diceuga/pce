@@ -7,7 +7,10 @@ class BWManager:
   #   - unrsvbw: bw
   #   - paths
   #     - name:bw
+  #   - wkpaths
+  #     - name:bw
   #   - sumpbw: bw
+  #   - sumwkpbw: bw
 
   def __init__(self, log):
     self.log = log
@@ -17,19 +20,30 @@ class BWManager:
     self.BWdb[lkey]["paths"][pname] = bw
     self.BWdb[lkey]["sumpbw"] += bw
 
+  def addwkpbw(self, lkey, bw, pname):
+    self.BWdb[lkey]["wkpaths"][pname] = bw
+    self.BWdb[lkey]["sumwkpbw"] += bw
+
   def delpbw(self, lkey, bw, pname):
     if lkey in self.BWdb.keys():
       self.BWdb[lkey]["paths"].pop(pname)
       self.BWdb[lkey]["sumpbw"] -= bw
 
-  def updbw(self, lkey, bw, mbw):
+  def delwkpbw(self, lkey, pname):
+    if lkey in self.BWdb.keys():
+      wkbw = self.BWdb[lkey]["wkpaths"][pname]
+      self.BWdb[lkey]["wkpaths"].pop(pname)
+      self.BWdb[lkey]["sumwkpbw"] -= wkbw
 
+  def updbw(self, lkey, bw, mbw):
     if lkey not in self.BWdb.keys():
        self.BWdb[lkey]            = {}
        self.BWdb[lkey]["maxbw"]   = mbw
        self.BWdb[lkey]["unrsvbw"] = bw
        self.BWdb[lkey]["sumpbw"]  = 0
        self.BWdb[lkey]["paths"]   = {}
+       self.BWdb[lkey]["sumwkpbw"]  = 0
+       self.BWdb[lkey]["wkpaths"]   = {}
     else:
        self.BWdb[lkey]["unrsvbw"] = bw
        self.BWdb[lkey]["maxbw"]   = mbw
