@@ -24,10 +24,11 @@ class BWManager:
     self.BWdb[lkey]["wkpaths"][pname] = bw
     self.BWdb[lkey]["sumwkpbw"] += bw
 
-  def delpbw(self, lkey, bw, pname):
+  def delpbw(self, lkey, pname):
     if lkey in self.BWdb.keys():
+      wkbw = self.BWdb[lkey]["paths"][pname]
       self.BWdb[lkey]["paths"].pop(pname)
-      self.BWdb[lkey]["sumpbw"] -= bw
+      self.BWdb[lkey]["sumpbw"] -= wkbw
 
   def delwkpbw(self, lkey, pname):
     if lkey in self.BWdb.keys():
@@ -58,16 +59,17 @@ class BWManager:
 
   def chkbw(self, lkey, bw):
     ebw = min(self.BWdb[lkey]["unrsvbw"], self.BWdb[lkey]["maxbw"] - self.BWdb[lkey]["sumpbw"])
+    ebw = ebw - self.BWdb[lkey]["sumwkpbw"]
     if ( ebw - bw ) >= 0:
       return True
     else:
       return False
 
-  def getbw(self, lkey):
-    if lkey in self.BWdb.keys():
-      return self.BWdb[lkey]["unrsvbw"]
-    else:
-      return None
+  #def getbw(self, lkey):
+  #  if lkey in self.BWdb.keys():
+  #    return self.BWdb[lkey]["unrsvbw"]
+  #  else:
+  #    return None
 
   def getallbw(self):
     return self.BWdb

@@ -11,6 +11,7 @@ import threading
 from protocols.bgpserver import BgpServer
 from utils.logging import setup_logging
 from utils.config  import ConfigManager
+from utils.diff    import DiffType
 import logging
 import queue
 from itertools import count
@@ -744,6 +745,7 @@ def compute_pathsX(pid):
                      cpathinfo["bw"], cpathinfo["link_set"]
                    )
   else:
+    #new
     #bwdiff  = pathinfo["bw"]
     removed_wkG  = remove_link2(
                      wkG, wk_linkstate, pd.bw, 0, set()
@@ -787,15 +789,21 @@ def compute_pathsX(pid):
     G_LOG.info("[COMPUTE] new path" + str(wk_results))
 
   # delete path ---> need to change
-  if pd.name in G_PATH.keys():
-    delete_path(pd.name)
+  #if pd.name in G_PATH.keys():
+  #  delete_path(pd.name)
 
   # add
   for wk_l in wk_results["link_set"]:
-    if wk_l not in G_LINK_TO_PATH.keys():
-      G_LINK_TO_PATH[wk_l] = set()
-    G_LINK_TO_PATH[wk_l].add(pd.name)
-    G_BM.addwkpbw(wk_l, wk_results["bw"],pd.name)
+    if cpathinfo != None:
+      if wk_l in cpathinfo["link_set"]:
+        bwdiff = max(0, wk_results["bw"] - cpathinfo["bw"] )
+        G_BM.addwkpbw(wk_l, bwdiff,pd.name)
+      else:
+        G_BM.addwkpbw(wk_l, wk_results["bw"],pd.name)
+    else:
+      G_BM.addwkpbw(wk_l, wk_results["bw"],pd.name)
+
+  # wkbw
 
   if pd.name not in G_PATH.keys():
     G_PATH[pd.name] = {}
@@ -854,6 +862,12 @@ def recompute_path_for_change():
         "comptype": pd.name
       }))
 
+def delete_p_from_d(p):
+  if p in G_PATH_d.keys():
+    for lk in list(G_PATH_d[p]["link_set"]):
+      G_BM.delpbw(lk,p)
+    G_PATH_d.pop(p)
+
 def check_path_optm():
   # BW check -> if wkbw + reserbable > max change.
   # PATH optimize
@@ -874,17 +888,29 @@ def check_path_optm():
     sorted_pathdef1 = sorted( allpathdef, key=lambda p: (-p.pri, -p.bw) ) # for new
     sorted_pathdef2 = sorted( allpathdef, key=lambda p: (p.pri, -p.bw)  ) # for bw
 
-    #-----------------------------------------
-    # del
-    #-----------------------------------------
-    #for pd in sorted_pathdef1:
-    #  if PCEP is not sync, delete
-    for k in G_PATH_d.keys():
-      # check path is initiated lsp
-      if k not in allpathdef.keys():
-        # delete path
-        pass
+    #print(G_PATH_d)
 
+    #-----------------------------------------
+    # del not sync pcep
+    #-----------------------------------------
+    # del from both G_PATH/G_PATH_d
+    for pd in sorted_pathdef1:
+      pass
+
+    #-----------------------------------------
+    # del not in path def
+    #-----------------------------------------
+    for k in list(G_PATH_d.keys()):
+      if G_PATH_d[k]["initiate"] == True:
+      # check path is initiated lsp
+        wk = G_CM.get_one_pathdef(k)
+        #print(wk)
+        if wk == None:
+          if k not in G_PATH.keys():
+            #print("delete")
+            delete_p_from_d(k)
+
+    #print(G_PATH_d)
     #-----------------------------------------
     # BW check
     #-----------------------------------------
@@ -902,11 +928,11 @@ def check_path_optm():
           #print("why")
           wkbw = 0
           for pd in sorted_pathdef2:
-            if pd.name in G_PATH.keys():
-              if G_PATH[pd.name]["bw"] > 0:
-                if lk in G_PATH[pd.name]["link_set"]:
+            if pd.name in G_PATH_d.keys():
+              if G_PATH_d[pd.name]["bw"] > 0:
+                if lk in G_PATH_d[pd.name]["link_set"]:
                   cpath.add(pd.name)
-                  wkbw += G_PATH[pd.name]["bw"]
+                  wkbw += G_PATH_d[pd.name]["bw"]
                   if wkbw > reducebw:
                     break
     for p in cpath:
@@ -996,18 +1022,18 @@ def handle_event(ev):
     #compute_paths4(comptype=ev["comptype"])
     compute_pathsX(ev["comptype"])
 
-  elif ev_t == "PATHDEL":
-    delete_path(ev["pathid"])
+  #elif ev_t == "PATHDEL":
+  #  delete_path(ev["pathid"])
 
 def debug_move_p():
   #print("debug move p")
-  print(G_BM.getallbw())
+  #print(G_BM.getallbw())
   #print("------------------")
   for p in list(G_PATH.keys()):
     G_PATH_d[p] = G_PATH[p]
 
     for lk in list(G_PATH_d[p]["link_set"]):
-      print(G_PATH_d[p])
+      #print(G_PATH_d[p])
       G_BM.addpbw(lk,G_PATH_d[p]["bw"],p)
 
     for lk in list(G_PATH[p]["link_set"]):
@@ -1015,20 +1041,18 @@ def debug_move_p():
 
     G_PATH.pop(p)
 
+
   print(G_BM.getallbw())
   
-  
-def delete_path(pathid):
-  # PCEP
-  
-  # delete from linktopath and bw
-  if pathid in G_PATH.keys():
-    for wk_l in G_PATH[pathid]["link_set"]:
-      G_BM.delpbw(wk_l, G_PATH[pathid]["bw"], pathid)
-      if wk_l in G_LINK_TO_PATH.keys():
-        G_LINK_TO_PATH[wk_l].discard(pathid)
-
-    G_PATH.pop(pathid)
+#def delete_path(pathid):
+#  # PCEP
+#  
+#  # delete from linktopath and bw
+#  if pathid in G_PATH.keys():
+#    for wk_l in G_PATH[pathid]["link_set"]:
+#      G_BM.delpbw(wk_l, G_PATH[pathid]["bw"], pathid)
+#
+#    G_PATH.pop(pathid)
 
 def remove_link2(G, linkstate, bw1, bw2, link_set):
   # bw check
@@ -1054,9 +1078,6 @@ def get_G_C_cnt():
 # LOG
 setup_logging(os.path.dirname(os.path.abspath(__file__)))
 G_LOG = logging.getLogger()
-
-# GRAPH RELATED
-G_LINK_TO_PATH = {} # Which path is on LINK(entry is set)
 
 # Queue
 G_C_Queue                  = queue.PriorityQueue() # calc
