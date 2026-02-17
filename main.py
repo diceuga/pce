@@ -13,7 +13,6 @@ from utils.logging import setup_logging
 from utils.config  import ConfigManager
 import logging
 import queue
-#from queue import PriorityQueue
 from itertools import count
 from manager.bwmanager import BWManager
 
@@ -59,6 +58,7 @@ class GraphManager:
     # start nw change mon
     self.wn = threading.Thread( target=self.check_nw_change,  daemon=True )
     self.wn.start()
+
     # start link change
     #th_c = threading.Thread( target=G_GM.check_link_state, daemon=True )
     #th_c.start()
@@ -114,7 +114,6 @@ class GraphManager:
 
     ev_time = int(time.time() * 1000)
 
-    #global G_PATH 
     global G_C_Queue
 
     t = ev["type"]
@@ -229,6 +228,16 @@ class GraphManager:
 
 
   #----------------------------------------
+
+  def ckeck_topo_change(old_attr: dict, new_attr: dict) -> bool:
+    excludek = {"max_link_bw", "max_reservable_bw", "unreserved_bw"}
+    for k in old_attr.keys() | new_attr.keys():
+        if k not in excludek:
+            if old_attr.get(k) != new_attr.get(k):
+                return True
+    return False
+
+    return True
   # link update/withdraw handle
   def handle_link(self, ev, ev_time):
     nlri   = ev["nlri"]
@@ -259,7 +268,6 @@ class GraphManager:
         #self.linkstate[key]["state"]  = "down"
         #self.linkstate[key]["cstate"] = "down"
         #self.linkstate[key]["statetime"] = ev_time
-
         self.BM.delbw(key)
 
         if self.bgpls_active == True:
@@ -276,9 +284,21 @@ class GraphManager:
 
       # ADD / UPDATE
       if "igp_metric" in lsattr:
+        oldlsattr = self.G_base.get_edge_data(src, dst, key)
+        print("new-lsattr")
+        print(lsattr)
+        print("old-lsattr")
+        print(oldlsattr)
+
+        wk_topo_change = False
+
+        if oldlsattr != None:
+          wk_only_bw_change = ckeck_topo_change(oldlsattr,lsattr)
 
         self.G_base.add_edge(src, dst, key=key, **lsattr)
-        self.G_base_t = ev_time
+
+        if wk_topo_change:
+          self.G_base_t = ev_time
 
         bk_maxrsvbw = 0
         bk_unrsvbw  = 0
@@ -358,7 +378,6 @@ class GraphManager:
   #            self.linkstate.pop(k)
   #          
   #    time.sleep(1.0)
-
   #----------------------------------------
   def check_nw_change(self):
 
@@ -410,7 +429,15 @@ class GraphManager:
 
   #----------------------------------------
   def get_last_g_time(self):
-    return self.snap_G_base_t
+    #return self.snap_G_base_t
+    return self.G_base_t
+
+
+class PathMnager:
+  def __init__(self, log):
+    self.log = log
+  
+
 
 
 #------------------------------------------
@@ -686,7 +713,12 @@ def dijkstra_to_dests(G, src, dests):
 def compute_pathsX(pid):
   G_LOG.info("[COMPUTE] computeX rtn start for " + pid)
 
-  cpathinfo  = G_PATH.get(pid)
+  if G_PATH.get(pid) != None:
+    G_LOG.info("[COMPUTE] skip there is other candidate")
+    return
+
+  #cpathinfo  = G_PATH.get(pid)
+  cpathinfo  = G_PATH_d.get(pid)
   pd         = G_CM.get_one_pathdef(pid)
 
   G_LOG.debug("[COMPUTE] path name: "  + str(pid))
@@ -697,17 +729,12 @@ def compute_pathsX(pid):
   wk_linkstate= None
   wk_skip_flg = False
 
-  bef_g_time  = G_GM.get_last_g_time()
+  #bef_g_time  = G_GM.get_last_g_time()
 
   #graph / linkinfo:
   ( wkG, wkG_t, wk_linkstate ) = G_GM.get_one_graph_infos(pd.underlay)
+  bef_g_time  = wkG_t
 
-  # skip
-  #if wk_skip_flg == True:
-  #  G_LOG.info("[COMPUTE] compute skip")
-  #  if pd.name in G_PATH.keys():
-  #    G_PATH[pd.name]["opttime"] = int(time.time() * 1000)
-  #  return
 
   #bwdiff = 0
   if cpathinfo != None:
@@ -735,6 +762,7 @@ def compute_pathsX(pid):
   #G_LOG.info("[COMPUTE] " + str(p))
 
   wk_results["time"]      = wkG_t
+  wk_results["initiate"]  = True
   wk_results["opttime"]   = int(time.time() * 1000)
   wk_results["underlay"]  = pd.underlay
   wk_results["bw"]        = pd.bw
@@ -749,10 +777,10 @@ def compute_pathsX(pid):
     G_LOG.info("[COMPUTE] NW change happend during compute")
     return
   else:
-    if pd.name in G_PATH.keys():
-      if ( wk_results["detail"] == G_PATH[pd.name]["detail"] ):
+    if pd.name in G_PATH_d.keys():
+      if ( wk_results["detail"] == G_PATH_d[pd.name]["detail"] ):
         G_LOG.info("[COMPUTE] calc results same as bef")
-        G_PATH[pd.name]["opttime"] = int(time.time() * 1000)
+        G_PATH_d[pd.name]["opttime"] = int(time.time() * 1000)
         return
 
     G_LOG.info("[COMPUTE] calc results")
@@ -767,7 +795,7 @@ def compute_pathsX(pid):
     if wk_l not in G_LINK_TO_PATH.keys():
       G_LINK_TO_PATH[wk_l] = set()
     G_LINK_TO_PATH[wk_l].add(pd.name)
-    G_BM.addpbw(wk_l, wk_results["bw"],pd.name)
+    G_BM.addwkpbw(wk_l, wk_results["bw"],pd.name)
 
   if pd.name not in G_PATH.keys():
     G_PATH[pd.name] = {}
@@ -838,6 +866,9 @@ def check_path_optm():
     if bgpls_status == False:
       continue
 
+    # test move p to _d
+    debug_move_p()
+
     # all path def
     allpathdef = G_CM.get_all_pathdef()
     sorted_pathdef1 = sorted( allpathdef, key=lambda p: (-p.pri, -p.bw) ) # for new
@@ -848,6 +879,11 @@ def check_path_optm():
     #-----------------------------------------
     #for pd in sorted_pathdef1:
     #  if PCEP is not sync, delete
+    for k in G_PATH_d.keys():
+      # check path is initiated lsp
+      if k not in allpathdef.keys():
+        # delete path
+        pass
 
     #-----------------------------------------
     # BW check
@@ -883,10 +919,10 @@ def check_path_optm():
     #-----------------------------------------
     # optm
     #-----------------------------------------
-    for k in G_PATH.keys():
+    for k in G_PATH_d.keys():
       pathinfo = G_CM.get_one_pathdef(k)
       now      = int(time.time() * 1000)
-      calctime = int(G_PATH[k]["opttime"])
+      calctime = int(G_PATH_d[k]["opttime"])
       #optmtime = pathinfo[k].get("optm")
       optmtime = pathinfo.optm
       #if optmtime != None:
@@ -910,7 +946,7 @@ def check_path_optm():
     # check PCEP sattus if sync calc
     for pd in sorted_pathdef1:
       # if PCEP, currently skip
-      if pd.name not in G_PATH.keys():
+      if pd.name not in G_PATH_d.keys():
         qpri = ( 100, get_G_C_cnt())
         G_C_Queue.put((qpri,{
           #"type": "RECOMPUTE4",
@@ -932,11 +968,12 @@ def handle_event(ev):
     cid   = ev["diff"]["id"]
     difft = ev["diff"]["type"]
     if ( difft == DiffType.DEL ):
-      qpri = ( 100, get_G_C_cnt())
-      G_C_Queue.put((qpri,{
-        "type": "PATHDEL",
-        "pathid": cid,
-      }))
+      pass
+      #qpri = ( 100, get_G_C_cnt())
+      #G_C_Queue.put((qpri,{
+      #  "type": "PATHDEL",
+      #  "pathid": cid,
+      #}))
       # delete path from nw(pcep)
     elif ( difft == DiffType.ADD ):
       pass
@@ -962,6 +999,25 @@ def handle_event(ev):
   elif ev_t == "PATHDEL":
     delete_path(ev["pathid"])
 
+def debug_move_p():
+  #print("debug move p")
+  print(G_BM.getallbw())
+  #print("------------------")
+  for p in list(G_PATH.keys()):
+    G_PATH_d[p] = G_PATH[p]
+
+    for lk in list(G_PATH_d[p]["link_set"]):
+      print(G_PATH_d[p])
+      G_BM.addpbw(lk,G_PATH_d[p]["bw"],p)
+
+    for lk in list(G_PATH[p]["link_set"]):
+      G_BM.delwkpbw(lk,p)
+
+    G_PATH.pop(p)
+
+  print(G_BM.getallbw())
+  
+  
 def delete_path(pathid):
   # PCEP
   
@@ -1003,11 +1059,12 @@ G_LOG = logging.getLogger()
 G_LINK_TO_PATH = {} # Which path is on LINK(entry is set)
 
 # Queue
-#G_C_Queue                  = queue.Queue() # calc
 G_C_Queue                  = queue.PriorityQueue() # calc
 G_C_Cnt                    = count()
+
 # Path
 G_PATH                     = {}
+G_PATH_d                   = {}
 
 # BWMAnager
 G_BM = BWManager(G_LOG)

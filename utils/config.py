@@ -218,6 +218,7 @@ class ConfigManager:
     pri  = raw.get("pri", 0)
     optm = raw.get("optm", 0)
     mode = raw.get("mode", "ecmp")
+    #sts  = raw.get("status", "up")
 
     if mode == "ecmp":
       K = raw.get("K", 128)
@@ -284,6 +285,6 @@ class ConfigManager:
       delta=delta,
       bw=bw,
       pri=pri,
-      optm=optm
+      optm=optm,
     )
 
