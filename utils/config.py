@@ -44,6 +44,10 @@ class ConfigManager:
     self.C_queue    = None
     self.C_cnt      = None
 
+    # M
+    self.PM         = None
+    self.GM         = None
+
     # info
     self.NODEINFO   = {}
     self.NODETIME   = 0
@@ -92,6 +96,12 @@ class ConfigManager:
   def attach_c_cnt(self, cb):
     self.C_cnt      = cb
 
+  def attach_PM(self, PM):
+    self.PM = PM
+
+  def attach_GM(self, GM):
+    self.GM = GM
+
   # bgpls
   def load_bgpls_config(self):
     #mtime = os.path.getmtime(self.CONFIG_PATH)
@@ -135,7 +145,8 @@ class ConfigManager:
 
         for d in diffs:
           #pri = (100, self.C_cnt())
-          self.G_queue.put({
+          #self.G_queue.put({
+          self.GM.G_queue.put({
             "type": "CONST_CONFIG",
             "diff": d,
           })
@@ -196,12 +207,20 @@ class ConfigManager:
 
         self.PATHINFO = wkdata
         self.PATHTIME = wktime
+        wkpathinfo = {}
         for name, raw in self.PATHINFO.items():
-          self.N_PATHINFO[name] = self.normalize_pathdef(name, raw)
+          wkpathinfo[name] = self.normalize_pathdef(name, raw)
+        
+        self.N_PATHINFO = wkpathinfo
+
+        #print(self.PATHINFO)
+        #print(self.PATHINFO)
 
         for d in diffs:
-          pri = (100, self.C_cnt())
-          self.C_queue.put((pri,{
+          #pri = (100, self.C_cnt())
+          #self.C_queue.put((pri,{
+          pri = (100, self.PM.get_C_cnt())
+          self.PM.C_queue.put((pri,{
               "type": "PATH_CONFIG",
               "diff": d,
           }))

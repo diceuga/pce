@@ -27,10 +27,9 @@ class GraphManager:
     self.Gc   = {}
     self.Gc_t = {}
 
-    self.linkstate   = {}             # done
     self.changed     = set()          # done
     self.linkdownflg = False          # done
-    self.bwdownflg   = False          # done
+    #self.bwdownflg   = False          # done
     self.maxtime     = 9999999999999  # done
     self.changed_t   = self.maxtime   # done
     #self.bwchanged   = set()          # done
@@ -41,7 +40,6 @@ class GraphManager:
     self.snap_G_base_t = 0          # done
     self.snap_Gc       = {}         # done
     self.snap_Gc_t     = {}         # done
-    #self.snap_linkstate= {}
     #self.snap_changed  = set()
 
     # state
@@ -52,6 +50,7 @@ class GraphManager:
 
     self.BM           = None
     self.CM           = None
+    self.PM           = None
 
     # start Q mon
     self.wq = threading.Thread( target=self.watch_graph_q, daemon=True )
@@ -59,10 +58,6 @@ class GraphManager:
     # start nw change mon
     self.wn = threading.Thread( target=self.check_nw_change,  daemon=True )
     self.wn.start()
-
-    # start link change
-    #th_c = threading.Thread( target=G_GM.check_link_state, daemon=True )
-    #th_c.start()
 
   def get_bgpls_active(self):
     return self.bgpls_active
@@ -72,6 +67,9 @@ class GraphManager:
 
   def attach_CM(self,CM):
     self.CM = CM
+
+  def attach_PM(self,PM):
+    self.PM = PM
 
   #----------------------------------------
   def check_link(self, linkdata, constinfo):
@@ -114,8 +112,6 @@ class GraphManager:
   def handle_graph_event(self,ev):
 
     ev_time = int(time.time() * 1000)
-
-    global G_C_Queue
 
     t = ev["type"]
     G_LOG.info(f"[GRAPH] event start {t}")
@@ -262,13 +258,6 @@ class GraphManager:
 
         self.G_base_t = ev_time
 
-        if key in self.linkstate:
-          self.linkstate.pop(key)
-        #if key not in self.linkstate:
-        #  self.linkstate[key] = {}
-        #self.linkstate[key]["state"]  = "down"
-        #self.linkstate[key]["cstate"] = "down"
-        #self.linkstate[key]["statetime"] = ev_time
         self.BM.delbw(key)
 
         if self.bgpls_active == True:
@@ -286,59 +275,32 @@ class GraphManager:
       # ADD / UPDATE
       if "igp_metric" in lsattr:
         oldlsattr = self.G_base.get_edge_data(src, dst, key)
-        print("new-lsattr")
-        print(lsattr)
-        print("old-lsattr")
-        print(oldlsattr)
+        #print("new-lsattr")
+        #print(lsattr)
+        #print("old-lsattr")
+        #print(oldlsattr)
 
         wk_topo_change = False
 
         if oldlsattr != None:
-          wk_only_bw_change = ckeck_topo_change(oldlsattr,lsattr)
+          wk_topo_change = ckeck_topo_change(oldlsattr,lsattr)
 
         self.G_base.add_edge(src, dst, key=key, **lsattr)
 
         if wk_topo_change:
           self.G_base_t = ev_time
 
-        bk_maxrsvbw = 0
-        bk_unrsvbw  = 0
-        wkbwdownflg   = False
-
-        if key not in self.linkstate:
-          self.linkstate[key] = {}
-        #if key in self.linkstate:
-        #  self.linkstate[key]["state"]  = "up"
-        #  self.linkstate[key]["statetime"] = ev_time
-        #  self.linkstate[key]["cstate"] = "uping"
-        #else:
-        #  self.linkstate[key] = {}
-        #  if ( self.bgpls_active == True ):
-        #    self.linkstate[key]["state"]  = "up"
-        #    self.linkstate[key]["statetime"] = ev_time
-        #    self.linkstate[key]["cstate"] = "uping"
-        else:
-          bk_maxrsvbw = self.linkstate[key]["maxrsvbw"]
-          bk_unrsvbw  = self.linkstate[key]["unrsvbw"]
-
-        self.linkstate[key]["state"]  = "up"
-        self.linkstate[key]["statetime"] = ev_time
-        #self.linkstate[key]["cstate"] = "up"
+        wk_maxrsvbw = 0
+        wk_unrsvbw  = 0
+        #wkbwdownflg   = False
 
         if "unreserved_bw" in lsattr.keys():
-          self.linkstate[key]["unrsvbw"]  = lsattr["unreserved_bw"][0]
-          #if ( self.linkstate[key]["unrsvbw"] < bk_unrsvbw ):
-          #  wkbwdownflg = True
-        else:
-          self.linkstate[key]["unrsvbw"]  = 0
+          wk_unrsvbw = lsattr["unreserved_bw"][0]
 
         if "max_reservable_bw" in lsattr.keys():
-          self.linkstate[key]["maxrsvbw"]  = lsattr["max_reservable_bw"]
-        else:
-          self.linkstate[key]["maxrsvbw"]  = 0
+          wk_maxrsvbw = lsattr["max_reservable_bw"]
           
-        # bw
-        self.BM.updbw(key,self.linkstate[key]["unrsvbw"],self.linkstate[key]["maxrsvbw"])
+        self.BM.updbw(key, wk_unrsvbw, wk_maxrsvbw)
 
         if self.bgpls_active == True:
           #constinfo = get_G_CONSTINFO()
@@ -347,38 +309,27 @@ class GraphManager:
             constinfo = self.CM.get_one_const(const)
             #new_d = self.check_link(lsattr, constinfo[const])
             new_d = self.check_link(lsattr, constinfo)
+
+            oldflg= self.Gc[const].has_edge(src,dst,key)
+
+            # check add/mod/del
             if new_d != None:
-              #print("Link ADD")
-              self.Gc[const].add_edge(src, dst, key=key, **new_d)
-              self.Gc_t[const] = ev_time
+              if oldflg == True:
+                self.Gc[const].add_edge(src, dst, key=key, **new_d)
+                if wk_topo_change:
+                  self.Gc_t[const] = ev_time
+              else:
+                self.Gc[const].add_edge(src, dst, key=key, **new_d)
+                self.Gc_t[const] = ev_time
+            else:
+              if oldflg == True:
+                self.Gc[const].remove_edge(src, dst, key)
+                self.Gc_t[const] = ev_time
 
           self.changed.add(key)
           self.changed_t=min(self.changed_t, ev_time)
 
-          #if wkbwdownflg == True:
-          #   self.bwdownflg = True
-          #  self.changed.add(key)
-          #  self.changed_t=min(self.changed_t, ev_time)
-          #  self.bwchanged_t=min(self.changed_t, ev_time)
 
-  #----------------------------------------
-  #def check_link_state(self):
-  #
-  #  while True:
-  #
-  #    now     = int(time.time() * 1000)
-  #    for k in self.linkstate.keys():
-  #      #if self.linkstate[k]["cstate"] == "uping" :
-  #      #  if ( now - self.linkstate[k]["statetime"] ) > 2000:
-  #      #    self.linkstate[k]["cstate"] = "up"
-  #      #    #print(str(k) + ":" + "uping->up")
-  #      #
-  #      if self.linkstate[k]["cstate"] == "down":
-  #        if ( now - self.linkstate[k]["statetime"] ) > 3600000:
-  #          if not self.G_base.has_edge(k[0],k[1],k):
-  #            self.linkstate.pop(k)
-  #          
-  #    time.sleep(1.0)
   #----------------------------------------
   def check_nw_change(self):
 
@@ -404,21 +355,10 @@ class GraphManager:
     self.G_Queue.put(ev)
 
   #----------------------------------------
-  #def get_graph_infos(self):
-  #  return (
-  #    copy.deepcopy(self.snap_Gc),
-  #    self.snap_Gc_t.copy(),
-  #    self.snap_G_base_t,
-  #    copy.deepcopy(self.linkstate)
-  #    )
-
   def get_one_graph_infos(self,gid):
     return (
-      #copy.deepcopy(self.snap_Gc),
       copy.deepcopy(self.snap_Gc[gid]),
       self.snap_Gc_t[gid],
-      #self.snap_G_base_t,
-      copy.deepcopy(self.linkstate)
     )
 
   #----------------------------------------
@@ -434,11 +374,20 @@ class GraphManager:
     return self.G_base_t
 
 
-class PathMnager:
+class PathManager:
   def __init__(self, log):
     self.log = log
+    self.C_Queue      = queue.PriorityQueue()
+    self.C_Cnt        = count()
+
+  def get_C_cnt(self):
+    return next(self.C_Cnt)
+
   
 
+
+    
+  
 
 
 #------------------------------------------
@@ -727,13 +676,12 @@ def compute_pathsX(pid):
 
   wkG         = None
   wkG_t       = None
-  wk_linkstate= None
   wk_skip_flg = False
 
   #bef_g_time  = G_GM.get_last_g_time()
 
   #graph / linkinfo:
-  ( wkG, wkG_t, wk_linkstate ) = G_GM.get_one_graph_infos(pd.underlay)
+  ( wkG, wkG_t ) = G_GM.get_one_graph_infos(pd.underlay)
   bef_g_time  = wkG_t
 
 
@@ -741,14 +689,13 @@ def compute_pathsX(pid):
   if cpathinfo != None:
     #bwdiff  = pathinfo["bw"] - cpathinfo["bw"]
     removed_wkG  = remove_link2(
-                     wkG, wk_linkstate, pd.bw,
-                     cpathinfo["bw"], cpathinfo["link_set"]
+                     wkG, pd.bw, cpathinfo["bw"], cpathinfo["link_set"]
                    )
   else:
     #new
     #bwdiff  = pathinfo["bw"]
     removed_wkG  = remove_link2(
-                     wkG, wk_linkstate, pd.bw, 0, set()
+                     wkG, pd.bw, 0, set()
                    )
 
   removed_rwkG = removed_wkG.reverse(copy=False)
@@ -856,8 +803,9 @@ def recompute_path_for_change():
 
     else:
       G_LOG.info("[COMPUTE] compute exec")
-      qpri = ( 50, get_G_C_cnt() )
-      G_C_Queue.put((qpri,{
+      qpri = ( 50, self.PM.get_C_cnt() )
+      #G_C_Queue.put((qpri,{
+      self.PM.C_Queue.put((qpri,{
         "type": "RECOMPUTEX",
         "comptype": pd.name
       }))
@@ -936,8 +884,10 @@ def check_path_optm():
                   if wkbw > reducebw:
                     break
     for p in cpath:
-      qpri = ( 100, get_G_C_cnt()) 
-      G_C_Queue.put((qpri,{
+      #qpri = ( 100, get_G_C_cnt()) 
+      qpri = ( 100, G_PM.get_C_cnt()) 
+      #G_C_Queue.put((qpri,{
+      G_PM.C_Queue.put((qpri,{
           "type": "RECOMPUTEX",
           "comptype": p,
       }))
@@ -956,10 +906,12 @@ def check_path_optm():
         optmtime = max(optmtime * 1000, 10000)
         if now - calctime > optmtime:
           #qpri = ( 100, now )
-          qpri = ( 100, get_G_C_cnt())
+          #qpri = ( 100, get_G_C_cnt())
+          qpri = ( 100, G_PM.get_C_cnt())
           #print("qpri")
           #print(qpri)
-          G_C_Queue.put((qpri,{
+          #G_C_Queue.put((qpri,{
+          G_PM.C_Queue.put((qpri,{
             #"type": "RECOMPUTE4",
             "type": "RECOMPUTEX",
             "comptype": k,
@@ -973,8 +925,10 @@ def check_path_optm():
     for pd in sorted_pathdef1:
       # if PCEP, currently skip
       if pd.name not in G_PATH_d.keys():
-        qpri = ( 100, get_G_C_cnt())
-        G_C_Queue.put((qpri,{
+        #qpri = ( 100, get_G_C_cnt())
+        #G_C_Queue.put((qpri,{
+        qpri = ( 100, G_PM.get_C_cnt())
+        G_PM.C_Queue.put((qpri,{
           #"type": "RECOMPUTE4",
           "type": "RECOMPUTEX",
           "comptype": pd.name,
@@ -1011,8 +965,10 @@ def handle_event(ev):
       #}))
     elif ( difft == DiffType.MOD ):
       #qpri = (100, ev_time)
-      qpri = ( 100, get_G_C_cnt())
-      G_C_Queue.put((qpri,{
+      #qpri = ( 100, get_G_C_cnt())
+      #G_C_Queue.put((qpri,{
+      qpri = ( 100, G_PM.C_cnt())
+      G_PM.C_Queue.put((qpri,{
         #"type": "RECOMPUTE4",
         "type": "RECOMPUTEX",
         "comptype": cid,
@@ -1042,7 +998,7 @@ def debug_move_p():
     G_PATH.pop(p)
 
 
-  print(G_BM.getallbw())
+  #print(G_BM.getallbw())
   
 #def delete_path(pathid):
 #  # PCEP
@@ -1054,11 +1010,13 @@ def debug_move_p():
 #
 #    G_PATH.pop(pathid)
 
-def remove_link2(G, linkstate, bw1, bw2, link_set):
+def remove_link2(G, bw1, bw2, link_set):
   # bw check
   bwdiff = max(bw1 - bw2, 0)
-  wkG = copy.deepcopy(G)
-  for k in linkstate:
+  #wkG = copy.deepcopy(G)
+  wkG = G
+  for _, _, k in list(wkG.edges(keys=True)):
+    #print(k)
     bwflg = False
     if ( k in link_set ):
       bwflg = G_BM.chkbw(k,bwdiff)
@@ -1070,8 +1028,8 @@ def remove_link2(G, linkstate, bw1, bw2, link_set):
   return wkG
 
 
-def get_G_C_cnt():
-  return next(G_C_Cnt)
+#def get_G_C_cnt():
+#  return next(G_C_Cnt)
 
 #-------------------------------------------
 # Main
@@ -1080,36 +1038,35 @@ setup_logging(os.path.dirname(os.path.abspath(__file__)))
 G_LOG = logging.getLogger()
 
 # Queue
-G_C_Queue                  = queue.PriorityQueue() # calc
-G_C_Cnt                    = count()
+#G_C_Queue                  = queue.PriorityQueue() # calc
+#G_C_Cnt                    = count()
 
 # Path
 G_PATH                     = {}
 G_PATH_d                   = {}
 
-# BWMAnager
-G_BM = BWManager(G_LOG)
+# Manager
+G_BM = BWManager(G_LOG)     # BWManager
+G_GM = GraphManager(G_LOG)  # GraphManager
+G_CM = ConfigManager(G_LOG) # ConfigManager
+G_PM = PathManager(G_LOG)   # PathManager
 
-# GraphManager
-G_GM = GraphManager(G_LOG)
-
-# ConfigManager
-G_CM = ConfigManager(G_LOG)
-
-# PathManager
 
 # Attach
-G_CM.attach_c_q(G_C_Queue)
-G_CM.attach_c_cnt(get_G_C_cnt)
+#G_CM.attach_c_q(G_C_Queue)
+#G_CM.attach_c_cnt(get_G_C_cnt)
 G_CM.attach_g_q(G_GM.G_Queue)
+G_CM.attach_PM(G_PM)
+G_CM.attach_GM(G_GM)
 
 G_GM.attach_BM(G_BM)
 G_GM.attach_CM(G_CM)
+G_GM.attach_PM(G_PM)
 
 def main():
 
   #global G_CONSTINFO, G_C_Queue
-  global G_C_Queue
+  #global G_C_Queue
 
   G_LOG.info("Main start")
 
@@ -1128,7 +1085,8 @@ def main():
 
   ############## Loop start 
   while True:
-    pri, ev = G_C_Queue.get()
+    #pri, ev = G_C_Queue.get()
+    pri, ev = G_PM.C_Queue.get()
     handle_event(ev)
 
 # start
