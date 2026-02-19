@@ -23,272 +23,98 @@ from manager.pathmanager  import PathManager
 #------------------------------------------
 # PATH RELATED
 #------------------------------------------
-#def ecmp_paths(results, k):
-#    if not results:
-#        return []
-#    best = results[0]["cost"]
-#    ecmp = [r for r in results if r["cost"] == best]
-#    return ecmp[:k]
+#def build_paths(pd, Gc, Gc_rev):
 #
-#def k_paths(results, k):
-#    return results[:k]
-
-def k_physical_paths_visited(DG, src, dst, K, delta, dist_dst, best, mode):
-    results   = []
-    sum_links = []
-
-    def dfs(u, cost, path, links, visited):
-        # prune
-        if cost + dist_dst.get(u, float("inf")) > best + delta:
-            return
-
-        if u == dst:
-            results.append({
-                "cost": cost,
-                "path": path + [u],
-                #"links": links.copy()
-                "links": list(links)
-            })
-            return
-
-        for _, v, k, data in DG.out_edges(u, keys=True, data=True):
-            if v in visited:
-                continue
-
-            visited.add(v)
-            path.append(u)
-            links.append(k)
-
-            dfs(
-                v,
-                cost + data["cost"],
-                path,
-                links,
-                visited
-            )
-
-            links.pop()
-            path.pop()
-            visited.remove(v)
-
-    dfs(src, 0, [], [], {src})
-
-    results.sort(key=lambda x: (x["cost"], len(x["path"])))
-
-    if ( mode == "ecmp" ):
-      R = G_PM.ecmp_paths(results, K)
-    else:
-      R = G_PM.k_paths(results,K)
-
-    return R
-
-
-#def build_paths(pd: PathDef, Gc, Gc_rev):
-def build_paths(pd, Gc, Gc_rev):
-
-    results={}
-    link_set=set()
-    src_set = []
-    dst_set = []
-
-    if ( pd.type == "p2p" ): 
-
-      for src in pd.src:
-        results[src] = {}
-
-        dist_src = nx.single_source_dijkstra_path_length( Gc, src, weight="cost" )
-
-        for dst in pd.dst:
-          if src == dst:
-            continue
-
-          best = dist_src.get(dst)
-          if best is None:
-            continue
-
-          dist_dst = nx.single_source_dijkstra_path_length( Gc_rev, dst, weight="cost" )
-          paths = k_physical_paths_visited(
-            Gc, src, dst, pd.K, pd.delta, dist_dst, best, pd.mode
-          )
-
-          results[src][dst]   = paths
-          for r in paths:
-            for r2 in r["links"]:
-              link_set.add(r2)
-    else:
-    # p2mp
-
-      src = pd.src[0]
-
-      (dest_dist, parent0) = dijkstra_to_dests(Gc, src, pd.dst)
-      o_dests = sorted(dest_dist, key=lambda d: dest_dist[d], reverse=True)
-
-      if len(o_dests) == 0:
-        return {}
-
-      tree_edges = set()
-      tree_nodes = set()
-
-      first = o_dests[0]
-      path = build_path(parent0, src, first)
-
-      for u, v, key in path:
-        tree_edges.add((u, v, key))
-        tree_nodes.add(u)
-        tree_nodes.add(v)
-
-
-      for d in o_dests[1:]:
-        if d in tree_nodes:
-          continue
-
-        dist2, parent2 = dijkstra_from_tree(Gc, tree_nodes, tree_edges)
-
-        # back to tree from d
-        u = d
-        path = []
-
-        #if u in tree_nodes:
-        #  continue
-
-        while u not in tree_nodes:
-          pi, key = parent2[u]
-          path.append((pi, u, key))
-          u = pi
-
-        path.reverse()
-
-        for e in path:
-          tree_edges.add(e)
-          tree_nodes.add(e[0])
-          tree_nodes.add(e[1])
-
-      for e in tree_edges:
-        link_set.add(e[2])
-      
-
-      #tree = tree_edges_to_json(tree_edges, src, Gc)
-      tree = tree_edges_to_json(tree_edges, src)
-
-      results = tree
-
-    return results, link_set
-
-
-#def tree_edges_to_json(tree_edges, src, G):
-def tree_edges_to_json(tree_edges, src):
-    #adj = build_adj(tree_edges, G)
-    adj = build_adj(tree_edges)
-    return {src: build_tree_json(adj, src)}
-
-def build_tree_json(adj, u, parent=None):
-    node  = {}
-    node["children"]  = []
-
-    #for v, key, cost in adj[u]:
-    for v, key in adj[u]:
-        if v == parent:
-            continue
-
-        a = build_tree_json(adj, v, u)
-
-        if a == None:
-          node["children"].append({
-              "node" : v,
-              "link" : key,
-          })
-        else:
-          node["children"].append({
-              "node" : v,
-              "link" : key,
-              **a
-          })
-    
-    if node["children"] == []:
-      return None
-
-    return node
-
-def build_adj(tree_edges):
-    adj = defaultdict(list)
-    for u, v, key in tree_edges:
-        adj[u].append((v, key))
-        adj[v].append((u, key))
-    return adj
-
-def dijkstra_from_tree(G, tree_nodes, tree_edges):
-
-    dist = {}
-    parent = {}
-    pq = []
-
-    # tree 上のノードは距離 0
-    for n in tree_nodes:
-        dist[n] = 0
-        pq.append((0, n))
-
-    heapq.heapify(pq)
-
-    while pq:
-        cost_u, u = heapq.heappop(pq)
-        if cost_u > dist[u]:
-            continue
-
-        for v, keydict in G[u].items():
-            for key, attr in keydict.items():
-                w = attr["cost"]
-
-                # 既存 tree を優遇（branch 抑制）
-                if (u, v, key) in tree_edges: # 
-                    w *= 0.5
-
-                new = cost_u + w
-                if v not in dist or new < dist[v]:
-                    dist[v] = new
-                    parent[v] = (u, key)
-                    heapq.heappush(pq, (new, v))
-
-    return dist, parent
-
-
-def build_path(parent, src, dest):
-    path = []
-    u = dest
-    while u != src:
-        p, key = parent[u]
-        path.append((p, u, key))
-        u = p
-    return list(reversed(path))
-
-
-def dijkstra_to_dests(G, src, dests):
-    dests = set(dests)
-    found = {}
-    parent = {}
-    dist = {src: 0}
-    pq = [(0, src)]
-
-    while pq and dests:
-      cost_u, u = heapq.heappop(pq)
-
-      if cost_u > dist[u]:
-        continue
-
-      if u in dests:
-        found[u] = cost_u
-        dests.remove(u)
-        # continue since there are another dests
-
-      for v, keydict in G[u].items():
-        for key, attr in keydict.items():
-          w = attr["cost"]   
-          new = cost_u + w
-          if v not in dist or new < dist[v]:
-              dist[v] = new
-              parent[v] = (u, key)
-              heapq.heappush(pq, (new, v))
-
-    return found, parent
+#    results={}
+#    link_set=set()
+#    src_set = []
+#    dst_set = []
+#
+#    if ( pd.type == "p2p" ): 
+#
+#      for src in pd.src:
+#        results[src] = {}
+#
+#        dist_src = nx.single_source_dijkstra_path_length( Gc, src, weight="cost" )
+#
+#        for dst in pd.dst:
+#          if src == dst:
+#            continue
+#
+#          best = dist_src.get(dst)
+#          if best is None:
+#            continue
+#
+#          dist_dst = nx.single_source_dijkstra_path_length( Gc_rev, dst, weight="cost" )
+#          #paths = k_physical_paths_visited(
+#          paths = G_PM.k_physical_paths_visited(
+#            Gc, src, dst, pd.K, pd.delta, dist_dst, best, pd.mode
+#          )
+#
+#          results[src][dst]   = paths
+#          for r in paths:
+#            for r2 in r["links"]:
+#              link_set.add(r2)
+#    else:
+#    # p2mp
+#
+#      src = pd.src[0]
+#
+#      #(dest_dist, parent0) = dijkstra_to_dests(Gc, src, pd.dst)
+#      (dest_dist, parent0) = G_PM.dijkstra_to_dests(Gc, src, pd.dst)
+#      o_dests = sorted(dest_dist, key=lambda d: dest_dist[d], reverse=True)
+#
+#      if len(o_dests) == 0:
+#        return {}
+#
+#      tree_edges = set()
+#      tree_nodes = set()
+#
+#      # base tree ( to farest node )
+#      first = o_dests[0]
+#      path = G_PM.build_one_path(parent0, src, first)
+#
+#      for u, v, key in path:
+#        tree_edges.add((u, v, key))
+#        tree_nodes.add(u)
+#        tree_nodes.add(v)
+#
+#
+#      # join to tree for 2nd- node
+#      for d in o_dests[1:]:
+#        if d in tree_nodes:
+#          continue
+#
+#        dist2, parent2 = G_PM.dijkstra_from_tree(Gc, tree_nodes, tree_edges)
+#
+#        # back to tree from d
+#        u = d
+#        path = []
+#
+#        #if u in tree_nodes:
+#        #  continue
+#
+#        while u not in tree_nodes:
+#          pi, key = parent2[u]
+#          path.append((pi, u, key))
+#          u = pi
+#
+#        path.reverse()
+#
+#        for e in path:
+#          tree_edges.add(e)
+#          tree_nodes.add(e[0])
+#          tree_nodes.add(e[1])
+#
+#      for e in tree_edges:
+#        link_set.add(e[2])
+#
+#      #tree = tree_edges_to_json(tree_edges, src, Gc)
+#      tree = G_PM.tree_edges_to_json(tree_edges, src)
+#
+#      results = tree
+#
+#    return results, link_set
 
 def compute_pathsX(pid):
   G_LOG.info("[COMPUTE] computeX rtn start for " + pid)
@@ -329,7 +155,8 @@ def compute_pathsX(pid):
   #G_LOG.info("[COMPUTE] path name:" + str(pd.name))
   G_LOG.info("[COMPUTE] compute start for " + pd.name)
 
-  p, link_set  = build_paths(pd, removed_wkG, removed_rwkG)
+  #p, link_set  = build_paths(pd, removed_wkG, removed_rwkG)
+  p, link_set  = G_PM.build_paths(pd, removed_wkG, removed_rwkG)
 
   G_LOG.info("[COMPUTE] compute end for" + pd.name)
   #G_LOG.info("[COMPUTE] calc results")
@@ -384,56 +211,6 @@ def compute_pathsX(pid):
 
   return True
 
-
-#def recompute_path_for_change():
-#
-#  G_LOG.info("[COMPUTE] recompute path check start")
-#
-#  normalized = G_CM.get_all_pathdef()
-#
-#  paths_sorted = sorted(
-#    normalized,
-#    key=lambda p: (-p.pri, -p.bw)
-#  ) 
-#
-#  wk_G = {}
-#  #wk_skip_flg = False
-#
-#  # Link down check 
-#  for pd in paths_sorted:
-#    wk_skip_flg = False
-#
-#    G_LOG.info("[COMPUTE] compute check " + str(pd.name))
-#
-#    if pd.name in G_PATH.keys():
-#      link_of_p     = G_PATH[pd.name]["link_set"]
-#      under_of_p    = G_PATH[pd.name]["underlay"]
-#      if under_of_p not in wk_G.keys():
-#        wk_G[under_of_p] = G_GM.get_one_graph(under_of_p)
-#      wk_del_flg = False
-#      for lkey in link_of_p:
-#        #if not wk_graphs[under_of_p].has_edge(lkey[0],lkey[1],lkey):
-#        if not wk_G[under_of_p].has_edge(lkey[0],lkey[1],lkey):
-#          wk_del_flg = True
-#          break
-#      if wk_del_flg == False:
-#        #G_LOG.info("[COMPUTE] skip no link deleted")
-#        wk_skip_flg = True
-#
-#    if wk_skip_flg:
-#      G_LOG.info("[COMPUTE] compute skip")
-#      if pd.name in G_PATH.keys():
-#        G_PATH[pd.name]["opttime"] = int(time.time() * 1000)
-#      continue
-#
-#    else:
-#      G_LOG.info("[COMPUTE] compute exec")
-#      qpri = ( 50, self.PM.get_C_cnt() )
-#      #G_C_Queue.put((qpri,{
-#      self.PM.C_Queue.put((qpri,{
-#        "type": "RECOMPUTEX",
-#        "comptype": pd.name
-#      }))
 
 def delete_p_from_d(p):
   if p in G_PATH_d.keys():
@@ -615,26 +392,8 @@ def debug_move_p():
 #
 #    G_PATH.pop(pathid)
 
-def remove_link2(G, bw1, bw2, link_set):
-  # bw check
-  bwdiff = max(bw1 - bw2, 0)
-  #wkG = copy.deepcopy(G)
-  wkG = G
-  for _, _, k in list(wkG.edges(keys=True)):
-    #print(k)
-    bwflg = False
-    if ( k in link_set ):
-      bwflg = G_BM.chkbw(k,bwdiff)
-    else:
-      bwflg = G_BM.chkbw(k,bw1)
-    if bwflg == False:
-      wkG.remove_edge(k[0],k[1],k)
 
-  return wkG
-
-
-#-------------------------------------------
-# Main
+#-------------------------------------------------------
 # LOG
 setup_logging(os.path.dirname(os.path.abspath(__file__)))
 G_LOG = logging.getLogger()

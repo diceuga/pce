@@ -1,7 +1,10 @@
 import queue
 import time
+from collections import defaultdict
 from itertools import count
 from utils.diff    import DiffType
+import heapq
+import networkx as nx
 
 
 class PathManager:
@@ -102,7 +105,7 @@ class PathManager:
       elif ( difft == DiffType.ADD ):
         pass
       elif ( difft == DiffType.MOD ):
-        qpri = ( 100, G_PM.C_cnt())
+        qpri = ( 100, self.C_cnt())
         self.C_Queue.put((qpri,{
           #"type": "RECOMPUTE4",
           "type": "RECOMPUTEX",
@@ -115,6 +118,95 @@ class PathManager:
 
   #-----------------------------------------------
   # compute
+  #-----------------------------------------------
+  def build_paths(self, pd, Gc, Gc_rev):
+    results  = {}
+    link_set = set()
+    src_set  = []
+    dst_set  = []
+
+    if ( pd.type == "p2p" ):
+
+      for src in pd.src:
+        results[src] = {}
+        dist_src = nx.single_source_dijkstra_path_length( Gc, src, weight="cost" )
+
+        for dst in pd.dst:
+          if src == dst:
+            continue
+
+          best = dist_src.get(dst)
+          if best is None:
+            continue
+
+          dist_dst = nx.single_source_dijkstra_path_length( Gc_rev, dst, weight="cost" )
+          paths = self.k_physical_paths_visited(
+            Gc, src, dst, pd.K, pd.delta, dist_dst, best, pd.mode
+          )
+
+          results[src][dst]   = paths
+          for r in paths:
+            for r2 in r["links"]:
+              link_set.add(r2)
+    else:
+    # p2mp
+
+      src = pd.src[0]
+      (dest_dist, parent0) = self.dijkstra_to_dests(Gc, src, pd.dst)
+      o_dests = sorted(dest_dist, key=lambda d: dest_dist[d], reverse=True)
+
+      if len(o_dests) == 0:
+        return {}
+
+      tree_edges = set()
+      tree_nodes = set()
+
+      # base tree ( to farest node )
+      first = o_dests[0]
+      path = self.build_one_path(parent0, src, first)
+
+      for u, v, key in path:
+        tree_edges.add((u, v, key))
+        tree_nodes.add(u)
+        tree_nodes.add(v)
+
+
+      # join to tree for 2nd- node
+      for d in o_dests[1:]:
+        if d in tree_nodes:
+          continue
+
+        dist2, parent2 = self.dijkstra_from_tree(Gc, tree_nodes, tree_edges)
+
+        # back to tree from d
+        u = d
+        path = []
+
+        #if u in tree_nodes:
+        #  continue
+
+        while u not in tree_nodes:
+          pi, key = parent2[u]
+          path.append((pi, u, key))
+          u = pi
+
+        path.reverse()
+
+        for e in path:
+          tree_edges.add(e)
+          tree_nodes.add(e[0])
+          tree_nodes.add(e[1])
+
+      for e in tree_edges:
+        link_set.add(e[2])
+
+      tree = self.tree_edges_to_json(tree_edges, src)
+
+      results = tree
+
+    return results, link_set
+
+
   def ecmp_paths(self, results, k):
     if not results:
         return []
@@ -122,6 +214,164 @@ class PathManager:
     ecmp = [r for r in results if r["cost"] == best]
     return ecmp[:k]
 
-  def k_paths(results, k):
+  def k_paths(self, results, k):
     return results[:k]
 
+  def k_physical_paths_visited(self, DG, src, dst, K, delta, dist_dst, best, mode):
+    results   = []
+    sum_links = []
+
+    def dfs(u, cost, path, links, visited):
+        # prune
+        if cost + dist_dst.get(u, float("inf")) > best + delta:
+            return
+
+        if u == dst:
+            results.append({
+                "cost": cost,
+                "path": path + [u],
+                #"links": links.copy()
+                "links": list(links)
+            })
+            return
+
+        for _, v, k, data in DG.out_edges(u, keys=True, data=True):
+            if v in visited:
+                continue
+
+            visited.add(v)
+            path.append(u)
+            links.append(k)
+
+            dfs(
+                v,
+                cost + data["cost"],
+                path,
+                links,
+                visited
+            )
+
+            links.pop()
+            path.pop()
+            visited.remove(v)
+
+    dfs(src, 0, [], [], {src})
+
+    results.sort(key=lambda x: (x["cost"], len(x["path"])))
+
+    if ( mode == "ecmp" ):
+      R = self.ecmp_paths(results, K)
+    else:
+      R = self.k_paths(results,K)
+
+    return R
+
+  def dijkstra_to_dests(self, G, src, dests):
+    dests = set(dests)
+    found = {}
+    parent = {}
+    dist = {src: 0}
+    pq = [(0, src)]
+
+    while pq and dests:
+      cost_u, u = heapq.heappop(pq)
+
+      if cost_u > dist[u]:
+        continue
+
+      if u in dests:
+        found[u] = cost_u
+        dests.remove(u)
+        # continue since there are another dests
+
+      for v, keydict in G[u].items():
+        for key, attr in keydict.items():
+          w = attr["cost"]
+          new = cost_u + w
+          if v not in dist or new < dist[v]:
+              dist[v] = new
+              parent[v] = (u, key)
+              heapq.heappush(pq, (new, v))
+
+    return found, parent
+
+  def build_one_path(self, parent, src, dest):
+    path = []
+    u = dest
+    while u != src:
+        p, key = parent[u]
+        path.append((p, u, key))
+        u = p
+    return list(reversed(path))
+
+  def dijkstra_from_tree(self, G, tree_nodes, tree_edges):
+
+    dist = {}
+    parent = {}
+    pq = []
+
+    for n in tree_nodes:
+        dist[n] = 0
+        pq.append((0, n))
+
+    heapq.heapify(pq)
+
+    while pq:
+        cost_u, u = heapq.heappop(pq)
+        if cost_u > dist[u]:
+            continue
+
+        for v, keydict in G[u].items():
+            for key, attr in keydict.items():
+                w = attr["cost"]
+
+                #if (u, v, key) in tree_edges: #
+                #    #w *= 0.5
+                #    w *= 1.0
+
+                new = cost_u + w
+                if v not in dist or new < dist[v]:
+                    dist[v] = new
+                    parent[v] = (u, key)
+                    heapq.heappush(pq, (new, v))
+
+    return dist, parent
+
+  def tree_edges_to_json(self, tree_edges, src):
+    adj = self.build_adj(tree_edges)
+    return {src: self.build_tree_json(adj, src)}
+
+  def build_adj(self, tree_edges):
+    adj = defaultdict(list)
+    for u, v, key in tree_edges:
+        adj[u].append((v, key))
+        adj[v].append((u, key))
+    return adj
+
+  def build_tree_json(self, adj, u, parent=None):
+    node  = {}
+    node["children"]  = []
+
+    #for v, key, cost in adj[u]:
+    for v, key in adj[u]:
+        if v == parent:
+            continue
+
+        a = self.build_tree_json(adj, v, u)
+
+        if a == None:
+          node["children"].append({
+              "node" : v,
+              "link" : key,
+          })
+        else:
+          node["children"].append({
+              "node" : v,
+              "link" : key,
+              **a
+          })
+
+    if node["children"] == []:
+      return None
+
+    return node
