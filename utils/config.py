@@ -40,9 +40,9 @@ class ConfigManager:
     #print(str(BASE_DIR))
 
     # Q
-    self.G_queue    = None
-    self.C_queue    = None
-    self.C_cnt      = None
+    #self.G_queue    = None
+    #self.C_queue    = None
+    #self.C_cnt      = None
 
     # M
     self.PM         = None
@@ -87,14 +87,14 @@ class ConfigManager:
     )
     self.wc.start()
 
-  def attach_g_q(self, Q):
-    self.G_queue    = Q
+  #def attach_g_q(self, Q):
+  #  self.G_queue    = Q
 
-  def attach_c_q(self, Q):
-    self.C_queue    = Q
+  #def attach_c_q(self, Q):
+  #  self.C_queue    = Q
 
-  def attach_c_cnt(self, cb):
-    self.C_cnt      = cb
+  #def attach_c_cnt(self, cb):
+  #  self.C_cnt      = cb
 
   def attach_PM(self, PM):
     self.PM = PM
@@ -146,7 +146,7 @@ class ConfigManager:
         for d in diffs:
           #pri = (100, self.C_cnt())
           #self.G_queue.put({
-          self.GM.G_queue.put({
+          self.GM.G_Queue.put({
             "type": "CONST_CONFIG",
             "diff": d,
           })

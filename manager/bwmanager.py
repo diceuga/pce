@@ -1,6 +1,3 @@
-#import logging
-#log = logging.getLogger("bgpls")
-
 class BWManager:
   # - link
   #   - maxbw:bw
