@@ -54,15 +54,17 @@ class ConfigManager:
     self.PATHINFO   = {}
     self.N_PATHINFO = {}
     self.PATHTIME   = 0
-    self.CONSTINFO   = {}
-    self.CONSTTIME   = 0
+    self.CONSTINFO  = {}
+    self.CONSTTIME  = 0
     self.BGPLSINFO  = {}
+    self.PCEPINFO   = {}
 
     # init load
     self.NODEINFO,  self.NODETIME   = self.load_node_config()
     self.PATHINFO,  self.PATHTIME   = self.load_path_config()
     self.CONSTINFO, self.CONSTTIME  = self.load_const_config()
     self.BGPLSINFO                  = self.load_bgpls_config()
+    self.PCEPINFO                   = self.load_pcep_config()
 
     # PATH NORM
     #print(self.PATHINFO)
@@ -108,6 +110,13 @@ class ConfigManager:
     with open(self.CONFIG_PATH) as f:
       wk = json.load(f)
       return wk.get("bgpls",{})
+
+  # bgpls
+  def load_pcep_config(self):
+    #mtime = os.path.getmtime(self.CONFIG_PATH)
+    with open(self.CONFIG_PATH) as f:
+      wk = json.load(f)
+      return wk.get("pcep",{})
 
   # const
   def load_const_config(self):
