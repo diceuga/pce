@@ -19,6 +19,9 @@ class PathManager:
     self.PATH         = {}
     self.PATH_d       = {}
 
+    # pcep status
+    self.PCC          = {}
+
     # start Q mon
     self.wq = threading.Thread( target=self.watch_compute_q, daemon=True )
     self.wq.start()
@@ -27,9 +30,41 @@ class PathManager:
     self.wp = threading.Thread( target=self.check_path_optm,  daemon=True )
     self.wp.start()
 
+
+  def handle_pcep_event(self, ev):
+    t   = ev["type"]
+    pcc = ev["pcc"]
+
+    if t == "PCC_SYNC":
+      if pcc not in self.PCC.keys():
+        self.PCC[pcc] = {}
+      self.PCC[pcc]["state"] = "sync"
+      self.PCC[pcc]["info"]  = ev["info"]
+    elif t == "PCC_DOWN":
+      # delete PCC state
+      print("DOWN")
+      print(pcc)
+      if pcc in self.PCC.keys():
+        self.PCC.pop(pcc)
+
+      for p in list(G_PATH.keys()):
+          print(p)
+      for p in list(G_PATH_d.keys()):
+          print(p)
+
+        #######################
+        # delete path
+        #######################
+        
+
+      
+    else:
+      print(t)
+
   def on_pcep_event(self, ev):
-    qpri = ( 100, self.get_C_cnt())
-    self.C_Queue.put(qpri, ev)
+    self.handle_pcep_event(ev)
+    #qpri = ( 100, self.get_C_cnt())
+    #self.C_Queue.put(qpri, ev)
 
   def attach_X(self,X):
     self.computeX = X
@@ -212,6 +247,8 @@ class PathManager:
 
     ev_time = int(time.time() * 1000)
 
+    #print(ev)
+
     ev_t = ev["type"]
     self.log.debug("[COMPUTE] event start "  + ev_t)
 
@@ -235,6 +272,10 @@ class PathManager:
 
     elif ev_t == "DELETE_PATH":
       delete_p_from_d(ev["comptype"])
+
+    #else:
+    #  print("ev_t:" + str(ev_t))
+
 
   def delete_p_from_d(self, p):
     if p in list(self.PATH_d.keys()):
@@ -313,6 +354,7 @@ class PathManager:
     wk_results["underlay"]  = pd.underlay
     wk_results["bw"]        = pd.bw
     wk_results["detail"]    = p
+    wk_results["src"]       = pd.src
     wk_results["link_set"]  = link_set
 
     aft_g_time  = self.GM.get_last_g_time()

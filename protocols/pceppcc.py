@@ -27,6 +27,17 @@ class PcepPcc(threading.Thread):
         self.event_cb = event_cb
         self.running = True
         self.last_rx = time.time()
+        self.openinfo = {}
+        self.sync    = False
+        self.hold_time = 120
+
+    def _hold_timer(self):
+      while self.running:
+        time.sleep(1)
+        #if time.time() - self.last_rx > self.hold_time:
+        if time.time() - self.last_rx > 5:
+          self.running = False
+          break
 
     def _recv_all(self, size):
         buf = b""
@@ -37,22 +48,47 @@ class PcepPcc(threading.Thread):
             buf += chunk
         return buf
 
+    def checkeos(repinfo):
+      ret = False
+      if ( repinfo["lsp"]["plsp_id"] == 0):
+        ret = True
+      pass
+
     def _handle_message(self, msg_type, payload):
       self.last_rx = time.time() 
-      if msg_type == PCEP_OPEN:
-        openinfo,respopen = decode_pcep_open(payload)
+
+      # open
+      if msg_type == 1:
         print("PCEP OPEN")
-        print(openinfo)
+        self.openinfo,respopen = decode_pcep_open(payload)
+        self.hold_time = self.openinfo.get("deadtimer",120)
+        print(self.openinfo)
         self.send_open(respopen)
 
-      elif msg_type == PCEP_KEEPALIVE:
-        print("KA")
+      # keep alive
+      elif msg_type == 2:
         self.send_ka()
+
       elif msg_type == PCEP_PCREPORT:
         print("REPORT")
         #print(payload)
-        print(time.time())
-        print(decode_pcep_report(payload))
+        #print(time.time())
+        repinfo = decode_pcep_report(payload)
+        if (self.sync == False):
+          if (repinfo["lsp"]["sync"] == False):
+            if ( repinfo["lsp"]["plsp_id"] == 0): 
+              self.sync = True
+              ev = {
+                "type": "PCC_SYNC",
+                "pcc" : self.peer_addr,
+                "info": self.openinfo
+              }
+              self.event_cb(ev)
+
+
+
+
+
       elif msg_type == PCEP_PCINITIATE:
         pass
       elif msg_type == PCEP_PCERROR:
@@ -60,25 +96,8 @@ class PcepPcc(threading.Thread):
       else:
         print(msg_type)
 
-    def build_pcep_open(self,keepalive=30, deadtimer=120, sid=1):
-      # OPEN Object Header
-      # Class=1, Type=1
-      obj_class = 1
-      obj_type = 1
-      print(type(keepalive))
-      print(type(deadtimer))
-      print(type(sid))
-
-
-      ver_flags = (1 << 5)  # PCEP v2
-      body = struct.pack("!BBBB", ver_flags, keepalive, deadtimer, sid)
-
-      length = 4 + len(body)
-      header = struct.pack("!BBH", obj_class, obj_type, length)
-
-      return header + body
-
     def send_ka(self):
+      # KA
       ver_flags = (1 << 5)
       msg_type = 2
       length = 4 
@@ -86,27 +105,21 @@ class PcepPcc(threading.Thread):
       self.conn.sendall(header)
 
     def send_open(self, payload):
-      #payload = self.build_pcep_open(
-      #    keepalive=open_info["keepalive"],
-      #    deadtimer=open_info["deadtimer"],
-      #    sid=1,
-      #)
-      #msg = self.build_pcep_open(PCEP_OPEN, payload)
-
-      obj_class = 1
-      obj_type = (1 << 4)
-      length = 4 + len(payload)
-      openobj = struct.pack("!BBH", obj_class, obj_type, length) + payload
-
+      # payload is open object
       ver_flags = (1 << 5)
       msg_type = 1
-      length = 4 + len(openobj)
+      length = 4 + len(payload)
       header = struct.pack("!BBH", ver_flags, msg_type, length)
 
-
-      self.conn.sendall(header + openobj)
+      self.conn.sendall(header + payload)
     
     def run(self):
+        watchdog = threading.Thread(
+          target=self._hold_timer,
+          daemon=True
+        )
+        watchdog.start()
+
         try:
           while self.running:
             hdr = self._recv_all(PCEP_HDR_LEN)
@@ -120,9 +133,10 @@ class PcepPcc(threading.Thread):
         except Exception as e:
           print(f"[PCEP] peer {self.peer_addr} error: {e}")
           traceback.print_exc()
+
         finally:
           self.conn.close()
-          self.event_cb({"type": "PCC_DOWN", "peer": self.peer_addr})
+          self.event_cb({"type": "PCC_DOWN", "pcc": self.peer_addr})
 
     def send(self, payload: bytes):
         self.conn.sendall(payload)

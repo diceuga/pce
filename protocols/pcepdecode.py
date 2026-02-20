@@ -9,12 +9,11 @@ TLV_SR_PCE_CAP       = 26
 TLV_PCE_INITIATE_CAP = 27
 TLV_PCECC_CAP        = 32
 
-def decode_pcep_tlvs(buf: bytes):
+def decode_pcep_open_tlvs(buf: bytes):
+  # decode and make response byte
   off = 0
   end = len(buf)
-  #tlvs = []
   res = {}
-  res["tlvs"] = {}
   resb = b''
 
   while off + 4 <= end:
@@ -28,15 +27,9 @@ def decode_pcep_tlvs(buf: bytes):
     v = buf[off:off+l]
     off += l
 
-    #tlvs.append({
-    #      "type": t,
-    #      "length": l,
-    #      "value": v
-    #})
-
     if t == TLV_STATEFUL_PCE_CAP:
         flags = struct.unpack("!I", v)[0]
-        res["tlvs"]["stateful"] = {
+        res["stateful"] = {
             "capable": True,
             "flags": {
                 "LSP-Update":       bool(flags & (1 << 0)),
@@ -48,52 +41,35 @@ def decode_pcep_tlvs(buf: bytes):
                 "P2MP-Capa"        :bool(flags & (1 << 6)),
             }
         }
+        # copy
         resb += tlvh + v
-
 
     elif t == TLV_SR_PCE_CAP:
         flags = struct.unpack("!I", v)[0]
-        res["tlvs"]["sr"] = {
+        res["sr"] = {
             "capable": True,
             "naive": bool(flags & (1 << 0)),
             "msd": flags >> 16
         }
         resb += tlvh + v
-        #resb += v
 
-    #elif t == TLV_PCE_INITIATE_CAP:
-    #    res["tlvs"]["pce_initiate"] = {
-    #        "capable": True
-    #    }
-
-    #elif t == TLV_PCECC_CAP:
-    #    flags = struct.unpack("!I", v)[0]
-    #    res["tlvs"]["pcecc"] = {
-    #        "capable": True,
-    #        "flags": flags
-    #    }
     elif t == 34:
-      #resb += v
       resb += tlvh + v
       pass
     elif t == 35:
-      #resb += v
       resb += tlvh + v
       pass
     elif t == 7:
       resb += tlvh + v
-      #resb += v
       pass
     elif t == 60:
       resb += tlvh + v
-
     else:
         #res["tlvs"][f"unknown_{t}"] = v
         print("unknow tlv type:" + str(t)) 
 
   return res, resb
 
-  #return tlvs
 
 def decode_pcep_report_tlvs(buf):
   off     = 0
@@ -191,7 +167,7 @@ def decode_pcep_report(payload: bytes):
             # 最低 8 byte までは fixed
             tlvs = decode_pcep_report_tlvs(rest)
 
-            print(tlvs)
+            #print(tlvs)
 
             for tlv in tlvs:
                 if tlv["type"] == TLV_LSP_NAME:
@@ -241,59 +217,39 @@ def decode_pcep_report(payload: bytes):
     return res
 
 
-
+# open decode
 def decode_pcep_open(payload):
   off     = 0
   res     = {}
   resopen = b''
-  #print(payload)
+
   while off + 4 <= len(payload):
     obj_class, obj_type, length = struct.unpack("!BBH", payload[off:off+4])
     body = payload[off+4:off+length]
     off += length
 
-    resopen += body[0:4]
+    fixed = body[0:4] # ver/flg/ka/ded/sid
 
     if obj_class == OBJ_OPEN:
-      # OPEN Object Body:
-      #  0               1               2               3
-      # +---------------+---------------+---------------+---------------+
-      # |Ver| Flags     | Keepalive     | DeadTimer     | SID           |
-      # +---------------+---------------+---------------+---------------+
       ver_flags = body[0]
-      keepalive = body[1]
-      deadtimer = body[2]
-      sid = body[3]
 
       res["version"] = (ver_flags >> 5) & 0x07
-      res["flags"] = ver_flags & 0x1F
-      res["keepalive"] = keepalive
-      res["deadtimer"] = deadtimer
-      res["sid"] = sid
+      #res["flags"] = ver_flags & 0x1F
+      res["keepalive"] = body[1]
+      res["deadtimer"] = body[2]
+      #res["sid"] = body[3]
 
-      tlvs,tlvb = decode_pcep_tlvs(body[4:])
-      #print(tlvs)
+      tlvs, tlvb = decode_pcep_open_tlvs(body[4:])
       res["tlvs"] = tlvs
 
+      objlen = 4 + len(fixed) + len(tlvb)
+      objhdr = struct.pack("!BBH", obj_class, obj_type, objlen)
+      resopen += objhdr + fixed + tlvb
 
     else:
       print("unknown open obj_class" + str(obj_class))
 
-    return res, resopen + tlvb
+    return res, resopen
   
 
-def decode_pcrpt(payload: bytes):
-    """
-    ここでは最小構成で:
-      - LSP object
-      - PLSP-ID
-      - PCC Router-ID
-    くらいを抜く想定
-    """
-    return {
-        "pcc": "10.0.0.1",
-        "plsp_id": 100,
-        "state": "UP",
-        "ero": ["1.1.1.1", "2.2.2.2"]
-    }
 

@@ -1,6 +1,6 @@
 # protocols/pcepmanager.py
 from protocols.pceppcc import PcepPcc
-from protocols.pcepdecode import decode_pcrpt
+#from protocols.pcepdecode import decode_pcrpt
 import queue
 
 class PcepManager:
@@ -21,13 +21,20 @@ class PcepManager:
     # ---------- peer → manager ----------
     def on_peer_event(self, ev):
         t = ev["type"]
-        peer = ev["peer"]
+        pcc = ev["pcc"]
 
         if t == "PCEP_REPORT":
             self._handle_report(peer, ev["raw"])
 
         elif t == "PEER_DOWN":
             self._handle_peer_down(peer)
+        elif t == "PCC_SYNC":
+          # just forward to main
+          print(ev)
+          self._emit_main(ev)
+        else:
+          print("event!!")
+          print(t)
 
     def _handle_report(self, peer, raw):
         lsp = decode_pcrpt(raw)
