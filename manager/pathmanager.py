@@ -161,6 +161,7 @@ class PathManager:
             "type": "DELETE_PATH_WK",
             "comptype": p,
           }))
+          print("delete WK PATH:" + p )
 
       # del not in path def
       #-----------------------------------------

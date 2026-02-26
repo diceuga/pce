@@ -1,6 +1,7 @@
 import socket
 from protocols.bgplsmanager import BgplsManager
 import threading
+from utils.diff            import DiffType
 
 class BgpServer(threading.Thread):
   def __init__(self, config):
@@ -17,8 +18,13 @@ class BgpServer(threading.Thread):
     self.manager = BgplsManager()
 
   def update_peers(self, ev):
-      print(ev)
-      pass
+    if ( ev["diff"]["type"] == DiffType.DEL ): # Just Del
+      self.peer_config.pop(ev["diff"]["id"])
+      self.manager.stoppeer(ev["diff"]["id"])
+      print(self.peer_config)
+    elif ( ev["diff"]["type"] == DiffType.ADD ):
+      self.peer_config[ev["diff"]["id"]] = ev["diff"]["new"]
+      print(self.peer_config)
 
   def register_main_callback(self, cb):
     self.manager.register_main_callback(cb)

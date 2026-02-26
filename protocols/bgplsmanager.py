@@ -22,6 +22,10 @@ class BgplsManager:
       self.main_cb = None
       self.global_state = "INIT"
 
+    def stoppeer(self, peer):
+      if peer in  self.peers:
+         self.peers[peer].running = False
+
     def register_main_callback(self, cb):
       self.main_cb = cb
 

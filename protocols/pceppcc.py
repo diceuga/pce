@@ -4,9 +4,11 @@ import struct
 import time
 import traceback
 import queue
+import itertools
 
 from protocols.pcepdecode import decode_pcep_open
 from protocols.pcepdecode import decode_pcep_report
+from protocols.pcepencode import build_pcinitiate_from_path
 
 PCEP_HDR_LEN = 4
 
@@ -33,6 +35,7 @@ class PcepPcc(threading.Thread):
         self.hold_time = 120
         self.send_queue = queue.Queue()
         self.log = log
+        self.srpid = itertools.count(1)
 
     def _hold_timer(self):
       while self.running:
@@ -97,12 +100,13 @@ class PcepPcc(threading.Thread):
             self.event_cb(ev)
          #pass 
 
-
       elif msg_type == PCEP_PCINITIATE:
         pass
       elif msg_type == PCEP_PCERROR:
+        print("PCEP_PCERROR")
         print(payload)
       else:
+        print("OTHER MSGTYPE")
         print(msg_type)
 
     def send_ka(self):
@@ -127,8 +131,20 @@ class PcepPcc(threading.Thread):
         self.conn.sendall(cmd["data"])
       elif cmd["type"] == "PATH UPDATE": #"JUST SEND":
         print("pcc handleevent")
-        print(self.peer_addr)
+        #print(self.peer_addr)
         print(cmd)
+        srpid = next(self.srpid)
+        A = build_pcinitiate_from_path(cmd,srpid)
+        if A != None:
+          ver_flags = (2 << 5)
+          length = 4 + len(A)
+          pcepmsg = struct.pack("!BBH", ver_flags, 12, length) + A
+          print(pcepmsg)
+          self.send_queue.put({
+            "type": 1,
+            "data": pcepmsg
+          })
+
 
 
     def start_sender(self):
