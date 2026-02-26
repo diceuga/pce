@@ -51,6 +51,7 @@ def setup_logging(base_dir):
     complog_path   = os.path.join(log_dir, "comp.txt")
     bgplslog_path  = os.path.join(log_dir, "bgp.txt")
     graphlog_path  = os.path.join(log_dir, "graph.txt")
+    pceplog_path   = os.path.join(log_dir, "pcep.txt")
 
     #level = getattr(logging, LOG_LEVEL, logging.INFO)
     level = getattr(logging, "INFO", logging.INFO)
@@ -72,7 +73,7 @@ def setup_logging(base_dir):
     logfile = WatchedFileHandler(log_path)
     logfile.setFormatter(formatter)
     logfile.setLevel(level)
-    logfile.addFilter(ExcludePrefixFilter(["[BGPLS]", "[COMPUTE]", "[GRAPH]"]))
+    logfile.addFilter(ExcludePrefixFilter(["[BGPLS]", "[COMPUTE]", "[GRAPH]", "[PCEP]"]))
 
     complogfile = WatchedFileHandler(complog_path)
     complogfile.setFormatter(formatter)
@@ -89,6 +90,11 @@ def setup_logging(base_dir):
     graphlogfile.setLevel(level)
     graphlogfile.addFilter(PrefixFilter("[GRAPH]"))
 
+    pceplogfile = WatchedFileHandler(pceplog_path)
+    pceplogfile.setFormatter(formatter)
+    pceplogfile.setLevel(level)
+    pceplogfile.addFilter(PrefixFilter("[PCEP]"))
+
     # コンソール出力（任意）
     #console_handler = logging.StreamHandler()
     #console_handler.setFormatter(formatter)
@@ -98,5 +104,6 @@ def setup_logging(base_dir):
     root.addHandler(bgplslogfile)
     root.addHandler(complogfile)
     root.addHandler(graphlogfile)
+    root.addHandler(pceplogfile)
     #root.addHandler(console_handler)
 

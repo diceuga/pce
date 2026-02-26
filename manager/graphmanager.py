@@ -241,7 +241,7 @@ class GraphManager:
         wk_topo_change = False
 
         if oldlsattr != None:
-          wk_topo_change = ckeck_topo_change(oldlsattr,lsattr)
+          wk_topo_change = self.ckeck_topo_change(oldlsattr,lsattr)
 
         self.G_base.add_edge(src, dst, key=key, **lsattr)
 

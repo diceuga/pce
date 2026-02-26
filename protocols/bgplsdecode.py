@@ -144,7 +144,6 @@ def decode_ls_attributes(buf: bytes):
 
         else:
           log.info("[BGPLS] unsupport ls attribute tlv: " + str(tlv_type))
-        # 他の TLV は無視（将来拡張）
 
     return attrs
 
@@ -342,7 +341,7 @@ def decode_ospf_nlri(nlri_type: int, tlvs):
          info["remote_node"] = decode_ospf_node_descriptor(s)
          tlvs.pop(i)
        elif t == 258:
-         print("***********************:LINK ID")
+         #print("***********************:LINK ID")
          info["link_identifier"] = v
          tlvs.pop(i)
        elif t == 259:
@@ -370,6 +369,7 @@ def decode_ospf_nlri(nlri_type: int, tlvs):
          info["ip_reachability_info"]["prefix"] = socket.inet_ntoa(pr)
          tlvs.pop(i)
        else:
+         print("unknown bgpls tlv:" +  t)
          i += 1
 
     return info

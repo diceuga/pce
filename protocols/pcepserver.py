@@ -4,11 +4,12 @@ import threading
 from protocols.pcepmanager import PcepManager
 
 class PcepServer(threading.Thread):
-    def __init__(self, config, tx_queue):
+    def __init__(self, config, tx_queue, log):
         super().__init__(daemon=True)
+        self.log = log
         self.bind_addr = (config["listen"], config["port"])
         self.peer_config = {p["address"]: p for p in config.get("pccs", [])}
-        self.manager = PcepManager(tx_queue)
+        self.manager = PcepManager(tx_queue, self.log)
 
     def register_main_callback(self, cb):
         self.manager.register_main_callback(cb)

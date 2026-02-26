@@ -3,6 +3,7 @@ import threading
 import struct
 import time
 import traceback
+import queue
 
 from protocols.pcepdecode import decode_pcep_open
 from protocols.pcepdecode import decode_pcep_report
@@ -20,7 +21,7 @@ PCEP_PCINITIATE = 11
 
 
 class PcepPcc(threading.Thread):
-    def __init__(self, peer_addr, sock, event_cb):
+    def __init__(self, peer_addr, sock, event_cb,log):
         super().__init__(daemon=True)
         self.peer_addr = peer_addr
         self.conn = sock
@@ -30,12 +31,14 @@ class PcepPcc(threading.Thread):
         self.openinfo = {}
         self.sync    = False
         self.hold_time = 120
+        self.send_queue = queue.Queue()
+        self.log = log
 
     def _hold_timer(self):
       while self.running:
         time.sleep(1)
-        #if time.time() - self.last_rx > self.hold_time:
-        if time.time() - self.last_rx > 5:
+        if time.time() - self.last_rx > self.hold_time:
+        #if time.time() - self.last_rx > 5:
           self.running = False
           break
 
@@ -73,20 +76,26 @@ class PcepPcc(threading.Thread):
         print("REPORT")
         #print(payload)
         #print(time.time())
-        repinfo = decode_pcep_report(payload)
-        if (self.sync == False):
-          if (repinfo["lsp"]["sync"] == False):
-            if ( repinfo["lsp"]["plsp_id"] == 0): 
+        repinfos = decode_pcep_report(payload)
+        print(repinfos)
+        for repinfo in repinfos:
+          if (repinfo["lsp"]["sync"] == False) and ( repinfo["lsp"]["plsp_id"] == 0): 
+            if (self.sync == False):
               self.sync = True
-              ev = {
-                "type": "PCC_SYNC",
-                "pcc" : self.peer_addr,
-                "info": self.openinfo
-              }
-              self.event_cb(ev)
-
-
-
+            ev = {
+              "type": "PCC_SYNC",
+              "pcc" : self.peer_addr,
+              "info": self.openinfo
+            }
+            self.event_cb(ev)
+          else:
+            ev = {
+              "type": "PCEP_REPORT",
+              "pcc" : self.peer_addr,
+              "info": repinfo
+            }
+            self.event_cb(ev)
+         #pass 
 
 
       elif msg_type == PCEP_PCINITIATE:
@@ -112,6 +121,29 @@ class PcepPcc(threading.Thread):
       header = struct.pack("!BBH", ver_flags, msg_type, length)
 
       self.conn.sendall(header + payload)
+
+    def _handle_command(self, cmd):
+      if cmd["type"] == 1: #"JUST SEND":
+        self.conn.sendall(cmd["data"])
+      elif cmd["type"] == "PATH UPDATE": #"JUST SEND":
+        print("pcc handleevent")
+        print(self.peer_addr)
+        print(cmd)
+
+
+    def start_sender(self):
+      t = threading.Thread(target=self._send_loop, daemon=True)
+      t.start()
+    
+    def _send_loop(self):
+      while self.running:
+        try:
+            cmd = self.send_queue.get()
+            self._handle_command(cmd)
+
+        except Exception as e:
+            self.running = False 
+            print(f"[PCEP] peer {self.peer_addr} send error: {e}")
     
     def run(self):
         watchdog = threading.Thread(
@@ -138,6 +170,8 @@ class PcepPcc(threading.Thread):
           self.conn.close()
           self.event_cb({"type": "PCC_DOWN", "pcc": self.peer_addr})
 
-    def send(self, payload: bytes):
-        self.conn.sendall(payload)
+    def send(self, ev):
+      self.send_queue.put(ev)
+        #self.conn.sendall(payload)
+        # queue
 

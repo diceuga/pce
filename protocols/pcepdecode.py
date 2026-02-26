@@ -1,6 +1,7 @@
 # protocols/pcepdecode.py
 import struct
 import socket
+import copy
 
 OBJ_OPEN = 1
 
@@ -72,25 +73,35 @@ def decode_pcep_open_tlvs(buf: bytes):
 
 
 def decode_pcep_report_tlvs(buf):
+
   off     = 0
   end     = len(buf)
   tlvs    = []
 
+
   while off + 4 <= end:
+    #print("=========")
+    #print(off)
     t, l = struct.unpack("!HH", buf[off:off+4])
+    #print(t)
+    #print(l)
     off += 4
 
     if off + l > end:
         raise ValueError("PCEP Report TLV overflow")
 
     v = buf[off:off+l]
-    off += l
+    if ( l % 4 ) != 0:
+      off += l + ( 4 - (l % 4) )
+    else:
+      off += l 
 
     tlvs.append({
         "type": t,
         "length": l,
         "value": v
     })
+    #print(tlvs)
 
   return tlvs
 
@@ -103,23 +114,39 @@ TLV_LSP_NAME   = 17   # Symbolic Path Name
 TLV_SRP_ID     = 20   # SRP-ID TLV (ベンダ実装により異なる場合あり)
 
 def decode_pcep_report(payload: bytes):
-    #print(payload)
+    #print(len(payload))
     off = 0
-    res = {
+    resp = []
+    res = None
+    empres = {
         "lsp": {},
         "srp": {},
         "ero": [],
         "tlvs": {}
     }
+    wknext = False
 
     while off + 4 <= len(payload):
+        #print("--------------")
+        #print(off)
         obj_class, obj_type, length = struct.unpack("!BBH", payload[off:off+4])
+        #print(length)
+        #print(obj_class)
         body = payload[off+4:off+length]
         #print(body)
         off += length
 
         # ---- LSP Object ----
         if obj_class == OBJ_LSP:
+            if res != None:
+              if res["lsp"] != {}:
+                if res["srp"] == {}:
+                  res["srp"]["srpid"] = 0
+                resp.append(copy.deepcopy(res))
+                res = copy.deepcopy(empres)
+            else:
+              res = copy.deepcopy(empres)
+
             #flags = struct.unpack("!I", body[0:4])[0]
             #res["lsp"]["delegated"] = bool(flags & (1 << 31))
             #res["lsp"]["sync"]      = bool(flags & (1 << 30))
@@ -162,6 +189,8 @@ def decode_pcep_report(payload: bytes):
 
             #rest = body[12:]
             rest = body[4:]
+            #print(len(rest))
+            #print(len(body[4:]))
 
             #tlvs = decode_pcep_report_tlvs(body[8:])
             # 最低 8 byte までは fixed
@@ -177,13 +206,21 @@ def decode_pcep_report(payload: bytes):
 
         # ---- SRP Object ----
         elif obj_class == OBJ_SRP:
+            if res != None:
+              resp.append(copy.deepcopy(res))
+              #res = empres
+              res = copy.deepcopy(empres)
+            else:
+              res = copy.deepcopy(empres)
+              #res = empres
+
             flags = struct.unpack("!I", body[0:4])[0]
             res["srp"]["LSP-remove"]   = flags & 1
             res["srp"]["LSP-Con req"]  = flags & (1 < 1)
 
 
             res["srp"]["flags"]  = struct.unpack("!I", body[0:4])[0]
-            res["srp"]["srp_id"] = struct.unpack("!I", body[4:8])[0]
+            res["srp"]["srpid"] = struct.unpack("!I", body[4:8])[0]
             tlvs = decode_pcep_report_tlvs(body[8:])
             res["srp"]["tlvs"] = tlvs
 
@@ -214,7 +251,12 @@ def decode_pcep_report(payload: bytes):
             if len(body) == 4:
                 res["lsp"]["bandwidth"] = struct.unpack("!f", body)[0]
 
-    return res
+
+    if res["srp"] == {}:
+      res["srp"]["srpid"] = 0
+    resp.append(copy.deepcopy(res))
+
+    return resp
 
 
 # open decode

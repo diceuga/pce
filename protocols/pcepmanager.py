@@ -2,21 +2,34 @@
 from protocols.pceppcc import PcepPcc
 #from protocols.pcepdecode import decode_pcrpt
 import queue
+import threading
 
 class PcepManager:
-    def __init__(self, tx_queue: queue.Queue):
+    def __init__(self, tx_queue: queue.Queue, log):
         self.peers = {}
         self.lsps = {}
         self.main_cb = None
         self.tx_queue = tx_queue
+        self.log  = log
+        self.rx_queue = queue.Queue()
+
+        # start path optm
+        self.wp = threading.Thread( target=self.check_rx_queue,  daemon=True )
+        self.wp.start()
 
     def register_main_callback(self, cb):
         self.main_cb = cb
 
     def register_peer(self, peer_addr, sock, peer_cfg):
-        peer = PcepPcc(peer_addr, sock, self.on_peer_event)
+        peer = PcepPcc(peer_addr, sock, self.on_peer_event, self.log)
         self.peers[peer_addr] = peer
         peer.start()
+        peer.start_sender()
+
+    def check_rx_queue(self):
+      while True:
+        ev = self.rx_queue.get()
+        self.handle_rx_event(ev)
 
     # ---------- peer → manager ----------
     def on_peer_event(self, ev):
@@ -24,13 +37,13 @@ class PcepManager:
         pcc = ev["pcc"]
 
         if t == "PCEP_REPORT":
-            self._handle_report(peer, ev["raw"])
-
+          #  self._handle_report(peer, ev["info"])
+          self._emit_main(ev)
         elif t == "PEER_DOWN":
             self._handle_peer_down(peer)
         elif t == "PCC_SYNC":
           # just forward to main
-          print(ev)
+          #print(ev)
           self._emit_main(ev)
         else:
           print("event!!")
@@ -60,14 +73,16 @@ class PcepManager:
                 })
 
     # ---------- main → manager ----------
-    def send_pce_command(self, cmd):
+    def handle_rx_event(self, cmd):
         """
         main から Queue 経由で飛んできた指示
         """
-        peer = cmd["peer"]
-        payload = cmd["payload"]
+        #print(cmd)
+        #return
+        peer = cmd["src"]
+        payload = cmd["detail"]
         if peer in self.peers:
-            self.peers[peer].send(payload)
+            self.peers[peer].send(cmd)
 
     def _emit_main(self, ev):
         if self.main_cb:

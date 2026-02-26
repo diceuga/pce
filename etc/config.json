@@ -1,4 +1,13 @@
 {
+  "pcep": {
+    "listen": "0.0.0.0",
+    "port": 4189,
+    "pccs": [
+      { "name": "pcc1",
+        "address": "100.127.0.101"
+      }
+    ]
+  },
   "bgpls": {
     "router_id": "100.64.89.2",
     "listen": "0.0.0.0",

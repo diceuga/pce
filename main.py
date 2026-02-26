@@ -52,9 +52,12 @@ def main():
   bgp.start()
 
   # PCEP START
-  pcep = PcepServer(G_CM.PCEPINFO, G_PM.P_Queue)
+  pcep = PcepServer(G_CM.PCEPINFO, G_PM.P_Queue, G_LOG)
   pcep.register_main_callback(G_PM.on_pcep_event)
   pcep.start()
+
+  # PCEP Server Q attach to PM
+  G_PM.attach_PCEP_Q(pcep.manager.rx_queue)
 
   ############## Loop start 
   while True:
