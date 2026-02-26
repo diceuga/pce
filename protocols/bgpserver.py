@@ -8,12 +8,17 @@ class BgpServer(threading.Thread):
     bgp = config
     self.bind_addr = (bgp["listen"], bgp["port"])
     self.router_id = bgp["router_id"]
-    self.peer_config = {
-      p["address"]: p
-      for p in bgp.get("peers", [])
-    }
+    self.peer_config = bgp.get("peers", [])
+    #self.peer_config = {
+    #  p["address"]: p
+    #  for p in bgp.get("peers", [])
+    #}
 
     self.manager = BgplsManager()
+
+  def update_peers(self, ev):
+      print(ev)
+      pass
 
   def register_main_callback(self, cb):
     self.manager.register_main_callback(cb)

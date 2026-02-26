@@ -17,6 +17,10 @@ class PcepManager:
         self.wp = threading.Thread( target=self.check_rx_queue,  daemon=True )
         self.wp.start()
 
+    def stoppcc(self, pcc):
+      if pcc in  self.peers:
+         self.peers[pcc].running = False
+
     def register_main_callback(self, cb):
         self.main_cb = cb
 

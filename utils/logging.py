@@ -4,6 +4,11 @@ import os
 import time
 from logging.handlers import WatchedFileHandler
 
+#  logtype
+#  ["[BGPLS]", "[COMPUTE]", "[GRAPH]", "[PCEP]"]
+#
+# 
+
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_FILE  = os.getenv("LOG_FILE", "/var/log/dag/app.log")
 
@@ -11,9 +16,8 @@ class NanoFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
         ns = time.time_ns()
         sec = ns // 1_000_000_000
-        nsec = ns % 1_000_000_000
+        #nsec = ns % 1_000_000_000
         usec = (ns % 1_000_000_000) // 1_000
-
 
         t = time.localtime(sec)
         if datefmt:
