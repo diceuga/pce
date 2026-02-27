@@ -16,6 +16,7 @@ PCEP_PCUPDATE   = 10
 _srp_id_gen = itertools.count(1)
 
 def _pcep_obj_header(obj_class, obj_type, body_len):
+    obj_type = obj_type << 4
     length = 4 + body_len
     return struct.pack("!BBH", obj_class, obj_type, length)
 
@@ -30,7 +31,7 @@ def build_lsp_object(name: str, delegated=True, create=True):
     if delegated:
         flags |= (1 << 0)   # D
     if create:
-        flags |= (1 << 1)   # C (Initiate / Create 用フラグ扱い)
+        flags |= (1 << 7)   # C (Initiate / Create 用フラグ扱い)
 
     plsp_id = 0  # 新規作成時は 0
     status = 0
@@ -39,7 +40,14 @@ def build_lsp_object(name: str, delegated=True, create=True):
 
     # Symbolic Path Name TLV (Type=17)
     name_b = name.encode()
-    tlv = struct.pack("!HH", 17, len(name_b)) + name_b
+    if len(name_b) % 4 == 0:
+      tlv = struct.pack("!HH", 17, len(name_b)) + name_b
+    elif len(name_b) % 4 == 1:
+      tlv = struct.pack("!HH", 17, len(name_b)) + name_b + struct.pack("!HB",0 , 0)
+    elif len(name_b) % 4 == 2:
+      tlv = struct.pack("!HH", 17, len(name_b)) + name_b + struct.pack("!H",0)
+    elif len(name_b) % 4 == 3:
+      tlv = struct.pack("!HH", 17, len(name_b)) + name_b + struct.pack("!B",0 )
 
     body = fixed + tlv
     return _pcep_obj_header(OBJ_LSP, 1, len(body)) + body
