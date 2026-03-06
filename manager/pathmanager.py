@@ -489,6 +489,7 @@ class PathManager:
     return True
 
   def build_paths(self, pd, Gc, Gc_rev):
+    print(Gc)
     results  = {}
     link_set = set()
     src_set  = []
@@ -520,11 +521,14 @@ class PathManager:
     else:
     # p2mp
 
+      print(pd)
+
       src = pd.src[0]
       (dest_dist, parent0) = self.dijkstra_to_dests(Gc, src, pd.dst)
       o_dests = sorted(dest_dist, key=lambda d: dest_dist[d], reverse=True)
 
       if len(o_dests) == 0:
+        print("o_dests")
         return {}
 
       tree_edges = set()

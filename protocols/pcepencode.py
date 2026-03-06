@@ -28,10 +28,10 @@ def build_srp_object(srpid):
 
 def build_lsp_object(name: str, delegated=True, create=True):
     flags = 0
-    if delegated:
-        flags |= (1 << 0)   # D
-    if create:
-        flags |= (1 << 7)   # C (Initiate / Create 用フラグ扱い)
+    #if delegated:
+    #    flags |= (1 << 0)   # D
+    #if create:
+    #    flags |= (1 << 7)   # C (Initiate / Create 用フラグ扱い)
 
     plsp_id = 0  # 新規作成時は 0
     status = 0
@@ -94,7 +94,7 @@ def build_pcinitiate_from_path(path_update: dict,srpid):
     objs += build_srp_object(srpid)
     objs += build_lsp_object(name=name, delegated=True, create=True)
     objs += build_ero_object_from_path(path_nodes)
-    objs += build_bandwidth_object(path_update["detail"].get("bw", 0))
+    #objs += build_bandwidth_object(path_update["detail"].get("bw", 0))
 
     return objs
 

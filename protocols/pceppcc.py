@@ -136,7 +136,7 @@ class PcepPcc(threading.Thread):
         srpid = next(self.srpid)
         A = build_pcinitiate_from_path(cmd,srpid)
         if A != None:
-          ver_flags = (2 << 5)
+          ver_flags = (1 << 5)
           length = 4 + len(A)
           pcepmsg = struct.pack("!BBH", ver_flags, 12, length) + A
           print(pcepmsg)
