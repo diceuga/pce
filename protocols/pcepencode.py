@@ -68,11 +68,14 @@ def build_bandwidth_object(bw_mbps: float):
     body = struct.pack("!f", float(bw_mbps))
     return _pcep_obj_header(OBJ_BANDWIDTH, 1, len(body)) + body
 
-def build_pcinitiate_from_path(path_update: dict,srpid):
+#def build_pcinitiate_from_path(path_update: dict,srpid):
+def build_pcinitiate_from_path(path_update: dict):
     """
     PATH UPDATE(dict) -> PCInitiate payload
     """
-    name = path_update["name"]
+    name  = path_update["name"]
+    srpid = path_update["detail"]["srpid"]
+    print("srpid" + str(srpid))
     if name == '2': # p2mp skip
       return None
     detail = path_update["detail"]["detail"]

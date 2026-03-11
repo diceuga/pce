@@ -5,6 +5,7 @@ import time
 import traceback
 import queue
 import itertools
+import logging
 
 from protocols.pcepdecode import decode_pcep_open
 from protocols.pcepdecode import decode_pcep_report
@@ -30,6 +31,7 @@ class PcepPcc(threading.Thread):
         self.event_cb = event_cb
         self.running = True
         self.last_rx = time.time()
+        self.last_tx = time.time()
         self.openinfo = {}
         self.sync    = False
         self.hold_time = 120
@@ -44,6 +46,8 @@ class PcepPcc(threading.Thread):
         #if time.time() - self.last_rx > 5:
           self.running = False
           break
+        if time.time() - self.last_tx > 10:
+          self.send_ka()
 
     def _recv_all(self, size):
         buf = b""
@@ -110,7 +114,7 @@ class PcepPcc(threading.Thread):
         print(msg_type)
 
     def send_ka(self):
-      # KA
+      # endA
       ver_flags = (1 << 5)
       msg_type = 2
       length = 4 
@@ -129,16 +133,21 @@ class PcepPcc(threading.Thread):
     def _handle_command(self, cmd):
       if cmd["type"] == 1: #"JUST SEND":
         self.conn.sendall(cmd["data"])
+
       elif cmd["type"] == "PATH UPDATE": #"JUST SEND":
-        print("pcc handleevent")
+        self.log.info("[PATH] PATH UPDATE")
+        self.log.info("[PATH] " + str(cmd))
+        #print("pcc handleevent")
         #print(self.peer_addr)
-        print(cmd)
-        srpid = next(self.srpid)
-        A = build_pcinitiate_from_path(cmd,srpid)
+        #print(cmd)
+        #srpid = next(self.srpid)
+        #A = build_pcinitiate_from_path(cmd,srpid)
+        A = build_pcinitiate_from_path(cmd)
         if A != None:
           ver_flags = (1 << 5)
           length = 4 + len(A)
           pcepmsg = struct.pack("!BBH", ver_flags, 12, length) + A
+          self.log.info("[PATH] INITIATE")
           print(pcepmsg)
           self.send_queue.put({
             "type": 1,
