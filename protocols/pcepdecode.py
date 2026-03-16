@@ -153,12 +153,14 @@ def decode_pcep_report(payload: bytes):
             #res["lsp"]["remove"]    = bool(flags & (1 << 29))
             #res["lsp"]["plsp_id"] = struct.unpack("!I", body[4:8])[0]
             fix   = struct.unpack("!HH", body[0:4])
-            #print(fix[0])
+            print("=======================")
+            print(fix[0])
             #print(fix[0] << 4)
-            #print(fix[1])
+            print(fix[1])
             #print(fix[1] >> 12)
 
             plsp_id = (fix[0] << 4) + ( fix[1] >> 12 )
+            print(plsp_id)
             #status = struct.unpack("!I", body[8:12])[0]
 
             delegate = bool(fix[1] & 1)

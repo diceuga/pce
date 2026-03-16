@@ -10,6 +10,7 @@ import logging
 from protocols.pcepdecode import decode_pcep_open
 from protocols.pcepdecode import decode_pcep_report
 from protocols.pcepencode import build_pcinitiate_from_path
+from protocols.pcepencode import build_pcdelete_from_path
 
 PCEP_HDR_LEN = 4
 
@@ -134,6 +135,21 @@ class PcepPcc(threading.Thread):
       if cmd["type"] == 1: #"JUST SEND":
         self.conn.sendall(cmd["data"])
 
+      elif cmd["type"] == "PATH DELETE": #"JUST SEND":
+        self.log.info("[PATH] PATH DELETE")
+        self.log.info("[PATH] " + str(cmd))
+        A = build_pcdelete_from_path(cmd)
+        if A != None:
+          ver_flags = (1 << 5)
+          length = 4 + len(A)
+          pcepmsg = struct.pack("!BBH", ver_flags, 12, length) + A
+          self.log.info("[PATH] INITIATE(DEL)")
+          print(pcepmsg)
+          self.send_queue.put({
+            "type": 1,
+            "data": pcepmsg
+          })
+
       elif cmd["type"] == "PATH UPDATE": #"JUST SEND":
         self.log.info("[PATH] PATH UPDATE")
         self.log.info("[PATH] " + str(cmd))
@@ -169,6 +185,7 @@ class PcepPcc(threading.Thread):
         except Exception as e:
             self.running = False 
             print(f"[PCEP] peer {self.peer_addr} send error: {e}")
+            traceback.print_exc()
     
     def run(self):
         watchdog = threading.Thread(

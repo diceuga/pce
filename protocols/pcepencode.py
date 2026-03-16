@@ -26,6 +26,12 @@ def build_srp_object(srpid):
     body = struct.pack("!II", flag, srpid)
     return _pcep_obj_header(OBJ_SRP, 1, len(body)) + body
 
+def build_srp_object_del(srpid):
+    #srp_id = next(_srp_id_gen)
+    flag   = 1
+    body = struct.pack("!II", flag, srpid)
+    return _pcep_obj_header(OBJ_SRP, 1, len(body)) + body
+
 def build_lsp_object(name: str, delegated=True, create=True):
     flags = 0
     #if delegated:
@@ -37,6 +43,36 @@ def build_lsp_object(name: str, delegated=True, create=True):
     status = 0
 
     fixed = struct.pack("!HH", plsp_id, flags)
+
+    # Symbolic Path Name TLV (Type=17)
+    name_b = name.encode()
+    if len(name_b) % 4 == 0:
+      tlv = struct.pack("!HH", 17, len(name_b)) + name_b
+    elif len(name_b) % 4 == 1:
+      tlv = struct.pack("!HH", 17, len(name_b)) + name_b + struct.pack("!HB",0 , 0)
+    elif len(name_b) % 4 == 2:
+      tlv = struct.pack("!HH", 17, len(name_b)) + name_b + struct.pack("!H",0)
+    elif len(name_b) % 4 == 3:
+      tlv = struct.pack("!HH", 17, len(name_b)) + name_b + struct.pack("!B",0 )
+
+    body = fixed + tlv
+    return _pcep_obj_header(OBJ_LSP, 1, len(body)) + body
+
+def build_lsp_object_del(name: str, delegated=True, create=True, plsp_id=0):
+    flags = 0
+    #if delegated:
+    #    flags |= (1 << 0)   # D
+    if create:
+        flags |= (1 << 3)   # C (Initiate / Create 用フラグ扱い)
+
+    #plsp_id = 0  # 新規作成時は 0
+    status = 0
+
+    fixed = struct.pack("!HH", ( plsp_id >> 4), ((plsp_id % 16 ) << 12 ) + flags)
+    print("000000000000000000000000000000000000000")
+    print(plsp_id)
+    print(fixed)
+
 
     # Symbolic Path Name TLV (Type=17)
     name_b = name.encode()
@@ -69,28 +105,49 @@ def build_bandwidth_object(bw_mbps: float):
     return _pcep_obj_header(OBJ_BANDWIDTH, 1, len(body)) + body
 
 #def build_pcinitiate_from_path(path_update: dict,srpid):
+def build_pcdelete_from_path(path_update: dict):
+    name    = path_update["name"]
+    plsp_id = path_update["detail"]["lsp"]["plsp_id"]
+    srpid   = path_update["srpid"]
+
+    print("del path_update")
+    print(path_update)
+    print(plsp_id)
+
+    objs = b""
+    objs += build_srp_object_del(srpid)
+    objs += build_lsp_object_del(name=name, delegated=False, create=True, plsp_id=plsp_id)
+
+    #pass
+    return objs
+
 def build_pcinitiate_from_path(path_update: dict):
     """
     PATH UPDATE(dict) -> PCInitiate payload
     """
     name  = path_update["name"]
     srpid = path_update["detail"]["srpid"]
-    print("srpid" + str(srpid))
+    #print("srpid" + str(srpid))
     if name == '2': # p2mp skip
       return None
     detail = path_update["detail"]["detail"]
 
     # --- p2p path 抽出（1本だけ取る最小実装） ---
     src = list(detail.keys())[0]
+    #dst = list(detail[src].keys())[0]
+
+    if len(list(detail[src].keys())) == 0:
+      return
     dst = list(detail[src].keys())[0]
-    print(src)
-    print(dst)
-    print(detail[src][dst])
+
+    #print(src)
+    #print(dst)
+    #print(detail[src][dst])
     #for d in detail[src][dst]:
     #  path_nodes.append(
     #print(detail[src][dst]["links"])
     path_nodes = detail[src][dst][0]["links"]
-    print("HOGE")
+    #print("HOGE")
     print(path_nodes)
 
     objs = b""

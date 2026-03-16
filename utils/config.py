@@ -265,7 +265,7 @@ class ConfigManager:
           #pri = (100, self.C_cnt())
           #self.C_queue.put((pri,{
           pri = (100, self.PM.get_C_cnt())
-          self.PM.C_queue.put((pri,{
+          self.PM.C_Queue.put((pri,{
               "type": "PATH_CONFIG",
               "diff": d,
           }))

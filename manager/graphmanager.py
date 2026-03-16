@@ -13,6 +13,7 @@ class GraphManager:
     # GRAPH RELATED
     self.G_base   = nx.MultiDiGraph()
     self.G_base_t = 0
+    self.G_link   = []
     self.Gc   = {}
     self.Gc_t = {}
 
@@ -90,7 +91,21 @@ class GraphManager:
         G_tmp.add_edge(u, v, key=k, **new_d)
 
     return G_tmp
+  
+  #----------------------------------------
+  def check_edge(self, d_info, u):
+    #print("check_edge")
+    d0 = d_info.split("/")[0]
 
+    for u, v, k, d in self.snap_Gc[u].edges(keys=True, data=True):
+      #print(k)
+      #print(d_info)
+      if d0 == k[3]:
+        return k
+
+    return None
+
+        
   #----------------------------------------
   def handle_graph_event(self,ev):
 
@@ -120,7 +135,8 @@ class GraphManager:
 
           #G_PATH = {}
           self.G_Queue.put({
-            "type": "NWCHANGE"
+            #"type": "NWCHANGE"
+            "type": "NWSYNC"
           })
 
         self.bgpls_active = True
@@ -138,6 +154,21 @@ class GraphManager:
         if self.bgpls_active == True:
           self.Gc[cid]   = self.make_G(self.G_base, cid, ev["diff"]["new"])
           self.Gc_t[cid] = ev_time
+
+    elif t == "NWSYNC":
+      print("NWSYNCW")
+      self.snap_G_base_t  = self.G_base_t
+      self.snap_Gc        = copy.deepcopy(self.Gc)
+      self.snap_Gc_t      = self.Gc_t.copy()
+
+      qpri = ( 100, self.PM.get_C_cnt())
+      self.PM.C_Queue.put((qpri,{
+        "type": "NWSYNC",
+      }))
+
+      self.changed     = set()
+      self.changed_t   = self.maxtime
+      self.linkdownflg = False
 
     elif t == "NWCHANGE":
       self.snap_G_base_t  = self.G_base_t
@@ -167,6 +198,9 @@ class GraphManager:
     d       = nlri["detail"]
     node_id = d["local_node"]["ipv4_router_id"]
 
+    self.log.info("[GRAPH] LS Node")
+    self.log.debug("[GRAPH] " + str(ev))
+
     # withdraw
     if ev["type"] == "LS_WITHDRAW":
 
@@ -188,7 +222,7 @@ class GraphManager:
 
   #----------------------------------------
 
-  def ckeck_topo_change(old_attr: dict, new_attr: dict) -> bool:
+  def ckeck_topo_change(self,old_attr: dict, new_attr: dict) -> bool:
     excludek = {"max_link_bw", "max_reservable_bw", "unreserved_bw"}
     for k in old_attr.keys() | new_attr.keys():
         if k not in excludek:
@@ -205,7 +239,7 @@ class GraphManager:
     lsattr = ev["ls_attrs"]
 
     self.log.info(f"[GRAPH] LS Link")
-    self.log.info(f"[GRAPH] " + str(ev))
+    self.log.debug(f"[GRAPH] " + str(ev))
 
     # None is ignore
     if None not in key:

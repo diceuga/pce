@@ -42,7 +42,7 @@ class PathManager:
       if pcc not in self.PCC.keys():
         self.PCC[pcc] = {}
       self.PCC[pcc]["state"] = "sync"
-      self.PCC[pcc]["info"]  = ev["info"]
+      #self.PCC[pcc]["info"]  = ev["info"]
       self.PCC[pcc]["info"]  = ev["info"]
     elif t == "PCC_DOWN":
       if pcc in self.PCC.keys():
@@ -67,7 +67,7 @@ class PathManager:
       print(t)
 
   def delete_path_for_pcc(pcc):
-    for p in self.PATH_n.keys()
+    for p in self.PATH_n.keys():
       if pcc == self.PATH_n[p]["c"]["src"]:
         self.PATH_n.pop(p)
 
@@ -82,13 +82,12 @@ class PathManager:
          
 
   def handle_pcep_report(self, pcc, repinfo):
-    ope      = repinfo["lsp"].get('ope',0)
-    create   = repinfo["lsp"].get('create',False)
-    delegate = repinfo["lsp"].get('delegate',False)
-    srpid    = repinfo["srp"].get('srpid',0)
+    #ope      = repinfo["lsp"].get('ope',0)
+    #create   = repinfo["lsp"].get('create',False)
+    #delegate = repinfo["lsp"].get('delegate',False)
+    #srpid    = repinfo["srp"].get('srpid',0)
     name     = repinfo["lsp"].get('name')
 
-    # path update anyway... after that change wk
     qpri = ( 100, self.get_C_cnt())
     self.C_Queue.put((qpri,{
       "type": "UPDATE_PATH_D",
@@ -137,13 +136,14 @@ class PathManager:
 
     while True:
       time.sleep(3.0)
-      self.log.info.("[PATH] PATH optm start")
+      self.log.info("[PATH] PATH optm start")
 
       # check bgp state
       bgpls_status = self.GM.get_bgpls_active()
       if bgpls_status == False:
         continue
 
+      now      = int(time.time() * 1000)
       # test move p to _d for debug need PCEP
       #self.debug_move_p()
 
@@ -154,39 +154,38 @@ class PathManager:
 
       # del not sync pcep from wk
       #----------------------------------------
-      for p in list(self.PATH_n.keys()):
-        src = self.PATH_n[p]["c"]["src"]
-        wkdel = False
-        for s in src:
-          if s in self.PCC.keys():
-            if self.PCC[s]["state"] != "sync":
-              wkdel = True
-          else:
-            wkdel = True
-
-        if wkdel == True:
-          qpri = ( 100, self.get_C_cnt())
-          self.C_Queue.put((qpri,{
-            "type": "DELETE_PATH",
-            "comptype": p,
-          }))
-          self.log.info.("[PATH] delete PATH: " + p )
-
+      #for p in list(self.PATH_n.keys()):
+      #  src = self.PATH_n[p]["c"]["src"]
+      #  wkdel = False
+      #  for s in src:
+      #    if s in self.PCC.keys():
+      #      if self.PCC[s]["state"] != "sync":
+      #        wkdel = True
+      #    else:
+      #      wkdel = True
+      #  if wkdel == True:
+      #    qpri = ( 100, self.get_C_cnt())
+      #    self.C_Queue.put((qpri,{
+      #      "type": "DELETE_PATH",
+      #      "comptype": p,
+      #    }))
+      #    self.log.info("[PATH] delete PATH: " + p )
+      #-----------------------------------------
       # del not in path def
       #-----------------------------------------
-      for k in list(self.PATH_d.keys()):
+      for k in list(self.PATH_n.keys()):
         # only initiate
-        if self.PATH_d[k]["pathinfo"]["lsp"]["create"] == True:
-          #if self.PATH_d[k]["initiate"] == True:
-          wk = self.CM.get_one_pathdef(k)
-          if wk == None:
-            #  if k not in self.PATH.keys():
-            #    self.delete_p_from_d(k)
-            qpri = ( 100, self.get_C_cnt())
-            self.C_Queue.put((qpri,{
-              "type": "DELETE_PATH",
-              "comptype": k,
-            }))
+        if self.PATH_n[k]["d"] != {}:
+          if self.PATH_n[k]["d"]["pathinfo"]["lsp"]["create"] == True:
+            #if self.PATH_d[k]["initiate"] == True:
+            wk = self.CM.get_one_pathdef(k)
+            if wk == None:
+              if self.PATH_n[p]["wk"]["status"] != "Init":
+                qpri = ( 100, self.get_C_cnt())
+                self.C_Queue.put((qpri,{
+                  "type": "DELETE_PATH",
+                  "comptype": k,
+                }))
 
       # BW check
       #-----------------------------------------
@@ -217,27 +216,72 @@ class PathManager:
       #-----------------------------------------
       # optm
       #-----------------------------------------
-      for k in self.PATH_d.keys():
+      self.log.info("[PATH] timer optimize start")
+      for k in self.PATH_n.keys():
         # only initiate LSP
-        if self.PATH_d[k]["pathinfo"]["lsp"]["create"] == True:
-          pathinfo = self.CM.get_one_pathdef(k)
-          now      = int(time.time() * 1000)
-          calctime = int(self.PATH_d[k]["opttime"])
-          optmtime = pathinfo.optm
+        #if "pathinfo" in self.PATH_n[k]["d"].keys():
+        #self.log.info("[PATH] timer optimize :" + str(k))
+        if self.PATH_n[k]["d"] != {}:
 
-          if optmtime != 0:
-            optmtime = max(optmtime * 1000, 10000)
-            if now - calctime > optmtime:
-              qpri = ( 100, self.get_C_cnt())
-              self.C_Queue.put((qpri,{
-                "type": "RECOMPUTEX",
-                "comptype": k,
-              }))
+          if self.PATH_n[k]["d"]["pathinfo"]["lsp"]["create"] == True:
+            #now      = int(time.time() * 1000)
+            pathinfo = self.PATH_n[k]["c"]["pathdef"]
+            optmtime = 10
+
+            # up
+            if self.PATH_n[k]["d"]["pathinfo"]["lsp"]["ope"] == 2:
+              calctime = int(self.PATH_n[k]["c"]["updatetime"])
+              optmtime = pathinfo.optm
+            else:
+              calctime = int(self.PATH_n[k]["w"]["calctime"])
+
+            if optmtime != 0:
+              optmtime = max(optmtime * 1000, 10000)
+              if now - calctime > optmtime:
+                self.log.info("[PATH] timer optimize :" + str(k) + " compute start")
+                qpri = ( 100, self.get_C_cnt())
+                self.C_Queue.put((qpri,{
+                  "type": "RECOMPUTEX",
+                  "comptype": k,
+                }))
+              else:
+                self.log.info("[PATH] timer optimize :" + str(k) + " compute skip")
+            else:
+              self.log.info("[PATH] timer optimize :" + str(k) + " compute skip")
+
+        elif self.PATH_n[k]["w"] != {}:
+          #self.log.info("[PATH] timer optimize :" + str(self.PATH_n[k]["w"]))
+          optmtime = 10
+          calctime = int(self.PATH_n[k]["w"]["pathinfo"]["calctime"])
+          optmtime = max(optmtime * 1000, 10000)
+          if now - calctime > optmtime:
+            self.log.info("[PATH] timer optimize :" + str(k) + " compute start")
+            qpri = ( 100, self.get_C_cnt())
+            self.C_Queue.put((qpri,{
+              "type": "RECOMPUTEX",
+              "comptype": k,
+            }))
+          else:
+            self.log.info("[PATH] timer optimize :" + str(k) + " compute skip")
 
       #-----------------------------------------
-      # New
+      # force recalc ( 300 sec over for INIT)
       #-----------------------------------------
+      self.log.info("[PATH] force recalc start")
+      for k in self.PATH_n.keys():
+        if self.PATH_n[k]["w"] != {}:
+          if self.PATH_n[k]["w"]["status"] == "Init":
+            calc = int(self.PATH_n[k]["w"]["pathinfo"]["calctime"])
+            if now - calctime > 300000:
+              self.log.info("[PATH] force recalc :" + str(k))
+              self.PATH_n[k]["w"] = {}
+
+      #-----------------------------------------
+      # New 
+      #-----------------------------------------
+      self.log.info("[PATH] optimize new start")
       for pd in sorted_pathdef1:
+        #self.log.info("[PATH] optimize new: " + str(pd.name))
         src = pd.src
         wknew = False
         for s in src:
@@ -245,15 +289,35 @@ class PathManager:
             if self.PCC[s]["state"] == "sync":
               wknew = True
         if wknew != True:
+          self.log.info("[PATH] optimize new: " + str(pd.name) + " compute skip")
           continue
 
-        if pd.name not in self.PATH_d.keys():
-          if pd.name not in self.PATH.keys():
-            qpri = ( 100, self.get_C_cnt())
-            self.C_Queue.put((qpri,{
-              "type": "RECOMPUTEX",
-              "comptype": pd.name,
-            }))
+        wknew = False
+        if pd.name not in self.PATH_n.keys():
+          wknew = True
+        else:
+          #self.log.info("[PATH] optimize new:" + str(self.PATH_n[pd.name]))
+          if "pathinfo" in self.PATH_n[pd.name]["d"].keys():
+            if self.PATH_n[pd.name]["d"]["pathinfo"]["lsp"]["ope"] != 2:
+              if self.PATH_n[pd.name]["w"] == {}:
+                wknew = True
+          else:
+            if self.PATH_n[pd.name]["w"] == {}:
+              wknew = True
+
+        if wknew == True:
+          self.log.info("[PATH] optimize new: " + str(pd.name) + " compute start")
+        #if ( ( pd.name not in self.PATH_n.keys() ) 
+        #  or ( self.PATH_n[pd.name]["w"] == None ) ):
+        #  if pd.name not in self.PATH.keys():
+          qpri = ( 100, self.get_C_cnt())
+          self.C_Queue.put((qpri,{
+            "type": "RECOMPUTEX",
+            "comptype": pd.name,
+          }))
+        else:
+          self.log.info("[PATH] optimize new: " + str(pd.name) + " compute skip")
+
 
   def remove_link(self, G, bw1, bw2, link_set):
     # bw check
@@ -356,44 +420,104 @@ class PathManager:
 
     elif ev_t == "DELETE_PATH_FOR_PCC":
       self.delete_path_for_pcc(ev["pcc"])
+
     elif ev_t == "DELETE_PATH":
       self.delete_p(ev["comptype"])
+
+    elif ev_t == "NWSYNC":
+      self.do_set_link_set()
 
     #else:
     #  print("ev_t:" + str(ev_t))
 
+  def set_link_set(self,p, info):
+    wk = set()
+    #print(info)
+    u  = info["c"]["pathdef"].underlay
+    wkflg = True
+    for e in info["d"]["pathinfo"]["ero"]:
+      lk = self.GM.check_edge(e, u)
+      if lk == None:
+        wkflg = False
+        break
+      else:
+        wk.add(lk)
+
+    if wkflg = True:
+      self.PATH_n[p]["d"]["pathinfo"]["link_set"] = wk
+    else:
+      qpri = ( 100, self.get_C_cnt())
+      self.C_Queue.put((qpri,{
+          "type": "RECOMPUTEX",
+          "comptype": p,
+      }))
+      
+
+
+  def do_set_link_set(self):
+    for p in self.PATH_n.keys():
+      self.set_link_set(p, self.PATH_n[p])
+
+
+  def delete_wkbw_base_p(self, p):
+    if p in list(self.PATHN_n.keys()):
+      for lk in self.PATH[p]["wk"]["link_set"]:
+        self.BM.delwkpbw(lk,p)
+
   def update_path_d(self, p, info, pcc):
-    if p not in self.PATH_d.keys():
-      self.PATH_d[p] = {}
+
+    remove = info["lsp"]["remove"]
+    #if p not in self.PATH_d.keys():
+    #  self.PATH_d[p] = {}
     if p not in self.PATH_n.keys():
       self.PATH_n[p] = {}
       self.PATH_n[p]["c"] = {}
       self.PATH_n[p]["d"] = {}
       self.PATH_n[p]["w"] = {}
 
-    self.PATH_n[p]["c"]["src"]    = pcc
-    self.PATH_n[p]["c"]["updatetime"]  = int(time.time() * 1000)
-    self.PATH_n[p]["c"]["opttime"]     = int(time.time() * 1000)
-    self.PATH_d[p]["d"]["pathinfo"] = info
+    if remove == True:
+      #self.PATH_n.pop(p)
+      self.delete_wkbw_base_p(p)
+      self.BM.delwkpbw(lk,p)
+      self.PATH_n.pop(p)
+      self.log.info("[PATH] path delete: " + str(p))
+    else:
+      self.PATH_n[p]["c"]["src"]    = pcc
+      self.PATH_n[p]["c"]["updatetime"]  = int(time.time() * 1000)
+      #self.PATH_n[p]["c"]["opttime"]     = int(time.time() * 1000)
+      self.PATH_n[p]["d"]["pathinfo"] = info
+      self.PATH_n[p]["d"]["pathinfo"]["bw"] = int(info["lsp"]["bandwidth"])
+      self.PATH_n[p]["d"]["link_set"] = set()
+
+      if self.PATH_n[p]["d"]["pathinfo"]["lsp"]["create"] == True:
+        self.PATH_n[p]["c"]["pathdef"] = self.CM.get_one_pathdef(p)
+        bgpls_status = self.GM.get_bgpls_active()
+        if ((bgpls_status == True)
+          and (self.PATH_n[p]["c"]["pathdef"] != None)):
+          self.set_link_set(p, self.PATH_n[p])
  
-    self.PATH_d[p]["pathinfo"] = info
-    self.PATH_d[p]["updatetime"]  = int(time.time() * 1000)
-    self.PATH_d[p]["opttime"]     = int(time.time() * 1000)
-    self.PATH_d[p]["pcc"]         = pcc
+      #self.PATH_d[p]["pathinfo"] = info
+      #self.PATH_d[p]["updatetime"]  = int(time.time() * 1000)
+      #self.PATH_d[p]["opttime"]     = int(time.time() * 1000)
+      #self.PATH_d[p]["pcc"]         = pcc
 
-    self.log.info("[PATH] path update:" + str(self.PATH_n[p] ))
+      self.log.info("[PATH] path update: " + str(self.PATH_n[p] ))
+      srpid  = info["srp"]["srpid"]
 
-    srpid = info["srp"]["srpid"]
-    name = info["lsp"]["name"]
+      #name   = info["lsp"]["name"]
+      #remove = info["lsp"]["remove"]
 
-    if srpid != 0:
+      if srpid != 0:
+        if ( self.PATH_n[p]["w"] != []):
+          self.PATH_n[p]["w"]["status"] = "Done"
+
+      #self.PATH_n[p]["w"]["status"] = "Done"
+
       #if name in self.PATH.keys():
-      if name in self.PATH.keys():
-        if srpid == self.PATH[p]["srpid"]:
-          self.log.info("[PATH] delete from wk due to report " + name)
-          self.delete_p_from_wk(name)
-
-
+      #if name in self.PATH.keys():
+      #  if srpid == self.PATH[p]["srpid"]:
+      #    self.log.info("[PATH] delete from wk due to report " + name)
+      #    self.delete_p_from_wk(name)
 
 
   def delete_p_from_both(self, p): # force delete
@@ -405,7 +529,16 @@ class PathManager:
   #------------------
   def delete_p(self, p): 
     if p in list(self.PATH_n.keys()):
-      self.PATH_n.pop(p)
+      srpid = self.get_srpid()
+      #wk_results["srpid"]  = srpid
+      self.PATH_n[p]["wk"]["status"] = "Init"
+      self.pcep_queue.put({
+        "type": "PATH DELETE",
+        "src" :  self.PATH_n[p]["c"]["src"],
+        "name":  p,
+        "detail"  : self.PATH_n[p]["d"]["pathinfo"],
+        "srpid": srpid
+      })
 
   #def delete_p_from_d(self, p):
   #  if p in list(self.PATH_d.keys()):
@@ -442,13 +575,25 @@ class PathManager:
   def compute_pathsX(self, pid):
     self.log.info("[COMPUTE] computeX rtn start for " + pid)
 
-    if self.PATH.get(pid) != None:
-      self.log.info("[COMPUTE] skip there is other candidate")
-      return
+    #if self.PATH.get(pid) != None:
+    #  self.log.info("[COMPUTE] skip there is other candidate")
+    #  return
+    if pid in self.PATH_n.keys():
+      if self.PATH_n[pid]["w"] != {}:
+        if self.PATH_n[pid]["w"]["status"] == "Init":
+          self.log.info("[COMPUTE] skip there is other candidate(d status = init")
+          return
 
-    #cpathinfo  = self.PATH.get(pid)
-    cpathinfo  = self.PATH_d.get(pid)
-    pd         = self.CM.get_one_pathdef(pid)
+    cpathinfo  = None
+    if pid in self.PATH_n.keys():
+      if self.PATH_n[pid]["d"] != {}:
+        if self.PATH_n[pid]["d"]["lsp"]["ope"] == 2:
+          cpathinfo = self.PATH_n[pid]["d"]["pathinfo"]
+      if cpathinfo == None:
+        if self.PATH_n[pid]["w"] != {}:
+          cpathinfo = self.PATH_n[pid]["w"]["pathinfo"]
+
+    pd = self.CM.get_one_pathdef(pid)
 
     self.log.debug("[COMPUTE] path name: "  + str(pid))
     self.log.debug("[COMPUTE] path def:  "  + str(pd))
@@ -464,13 +609,13 @@ class PathManager:
     #bwdiff = 0
     if cpathinfo != None:
       removed_wkG  = self.remove_link(
-                       wkG, pd.bw, cpathinfo["bw"], cpathinfo["link_set"]
-                     )
+        wkG, pd.bw, cpathinfo["bw"], cpathinfo["link_set"]
+      )
     else:
       #new
       removed_wkG  = self.remove_link(
                        wkG, pd.bw, 0, set()
-                     )
+      )
 
     removed_rwkG = removed_wkG.reverse(copy=False)
     wk_results = {}
@@ -484,6 +629,7 @@ class PathManager:
     wk_results["time"]      = wkG_t
     wk_results["initiate"]  = True
     wk_results["opttime"]   = int(time.time() * 1000)
+    wk_results["calctime"]   = int(time.time() * 1000)
     wk_results["underlay"]  = pd.underlay
     wk_results["bw"]        = pd.bw
     wk_results["detail"]    = p
@@ -496,10 +642,10 @@ class PathManager:
       self.log.info("[COMPUTE] NW change happend during compute")
       return
     else:
-      if pd.name in self.PATH_d.keys():
-        if ( wk_results["detail"] == self.PATH_d[pd.name]["detail"] ):
+      if pd.name in self.PATH_n.keys():
+        if ( wk_results["detail"] == self.PATH_n[pd.name]["w"]["pathinfo"]["detail"] ):
           self.log.info("[COMPUTE] calc results same as bef")
-          self.PATH_d[pd.name]["opttime"] = int(time.time() * 1000)
+          self.PATH_n[pd.name]["w"]["pathinfo"]["calctime"] = int(time.time() * 1000)
           return
 
       self.log.info("[COMPUTE] calc results")
@@ -522,19 +668,37 @@ class PathManager:
     if pd.name not in self.PATH.keys():
       self.PATH[pd.name] = {}
 
+    if pd.name not in self.PATH_n.keys():
+      self.PATH_n[pd.name] = {}
+      self.PATH_n[pd.name]["c"] = {}
+      self.PATH_n[pd.name]["d"] = {}
+      self.PATH_n[pd.name]["w"] = {}
+
     self.PATH[pd.name] = wk_results
 
-    # pcep
-    self.pcep_queue.put({
-      "type": "PATH UPDATE",
-      "src" :  pd.src[0],
-      "name":  pd.name,
-      "detail"  : self.PATH[pd.name]
+    self.PATH_n[pd.name]["c"]["pathdef"]  = pd
+    self.PATH_n[pd.name]["c"]["src"]      = pd.src
+    self.PATH_n[pd.name]["w"]["pathinfo"] = wk_results
+    self.PATH_n[pd.name]["w"]["status"]   = "Init"
+    self.PATH_n[pd.name]["w"]["pathinfo"]["calctime"] = int(time.time() * 1000)
 
-    })
-    # 
+    #print(type(wk_results["detail"][pd.src]))
+    #print(wk_results["detail"][pd.src])
 
-    return True
+    if wk_results["detail"][pd.src[0]] != {}: 
+      self.pcep_queue.put({
+        "type": "PATH UPDATE",
+        "src" :  pd.src[0],
+        "name":  pd.name,
+        "detail"  : self.PATH_n[pd.name]["w"]["pathinfo"]
+      })
+    else:
+      self.PATH_n[pd.name]["w"]["status"]  = "No path"
+
+    self.log.info("[PATH] last_pathinfo: " + pd.name)
+    self.log.info("[PATH] last pathinfo: " + str(self.PATH_n[pd.name]))
+
+    #return True
 
   def build_paths(self, pd, Gc, Gc_rev):
     print(Gc)
