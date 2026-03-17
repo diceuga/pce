@@ -49,6 +49,8 @@ class PcepManager:
           # just forward to main
           #print(ev)
           self._emit_main(ev)
+        elif t == "PCEP_ERROR":
+          self._emit_main(ev)
         else:
           print("event!!")
           print(t)

@@ -2,6 +2,9 @@
 import struct
 import socket
 import copy
+import logging
+
+log = logging.getLogger()
 
 OBJ_OPEN = 1
 
@@ -67,7 +70,8 @@ def decode_pcep_open_tlvs(buf: bytes):
       resb += tlvh + v
     else:
         #res["tlvs"][f"unknown_{t}"] = v
-        print("unknow tlv type:" + str(t)) 
+        #print("unknow tlv type:" + str(t)) 
+        log.info("[PCEP ] unknow tlv type: " + str(t))
 
   return res, resb
 
@@ -113,6 +117,34 @@ OBJ_BANDWIDTH  = 5
 TLV_LSP_NAME   = 17   # Symbolic Path Name
 TLV_SRP_ID     = 20   # SRP-ID TLV (ベンダ実装により異なる場合あり)
 
+def decode_pcep_error(payload: bytes):
+    print("pcep error")
+    off = 0
+    resp = {}
+    res = None
+    while off + 4 <= len(payload):
+        obj_class, obj_type, length = struct.unpack("!BBH", payload[off:off+4])
+        body = payload[off+4:off+length]
+        off += length
+
+        # ---- SRP Object ----
+        if obj_class == OBJ_SRP:
+            resp["srp"] = {}
+            flags = struct.unpack("!I", body[0:4])[0]
+            resp["srp"]["LSP-remove"]   = flags & 1
+            resp["srp"]["LSP-Con req"]  = flags & (1 < 1)
+            resp["srp"]["flags"]  = struct.unpack("!I", body[0:4])[0]
+            resp["srp"]["srpid"] = struct.unpack("!I", body[4:8])[0]
+            #tlvs = decode_pcep_report_tlvs(body[8:])
+            #resp["srp"]["tlvs"] = tlvs
+        elif obj_class == 13:
+            resp["error"] = body
+
+        #print("error :" + str(obj_class) + " / " + str(obj_type) ) 
+
+    return resp   
+
+
 def decode_pcep_report(payload: bytes):
     #print(len(payload))
     off = 0
@@ -153,15 +185,8 @@ def decode_pcep_report(payload: bytes):
             #res["lsp"]["remove"]    = bool(flags & (1 << 29))
             #res["lsp"]["plsp_id"] = struct.unpack("!I", body[4:8])[0]
             fix   = struct.unpack("!HH", body[0:4])
-            print("=======================")
-            print(fix[0])
-            #print(fix[0] << 4)
-            print(fix[1])
-            #print(fix[1] >> 12)
 
             plsp_id = (fix[0] << 4) + ( fix[1] >> 12 )
-            print(plsp_id)
-            #status = struct.unpack("!I", body[8:12])[0]
 
             delegate = bool(fix[1] & 1)
             sync     = bool(fix[1] & (1 << 1))
@@ -291,7 +316,8 @@ def decode_pcep_open(payload):
       resopen += objhdr + fixed + tlvb
 
     else:
-      print("unknown open obj_class" + str(obj_class))
+      #print("unknown open obj_class" + str(obj_class))
+      log.info("[PCEP] unknown open obj_class: " + str(obj_class))
 
     return res, resopen
   

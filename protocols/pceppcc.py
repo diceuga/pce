@@ -9,6 +9,7 @@ import logging
 
 from protocols.pcepdecode import decode_pcep_open
 from protocols.pcepdecode import decode_pcep_report
+from protocols.pcepdecode import decode_pcep_error
 from protocols.pcepencode import build_pcinitiate_from_path
 from protocols.pcepencode import build_pcdelete_from_path
 
@@ -70,10 +71,11 @@ class PcepPcc(threading.Thread):
 
       # open
       if msg_type == 1:
-        print("PCEP OPEN")
-        self.openinfo,respopen = decode_pcep_open(payload)
+        self.log.info("[PCEP] OPEN " + str(self.peer_addr))
+        self.openinfo, respopen = decode_pcep_open(payload)
         self.hold_time = self.openinfo.get("deadtimer",120)
-        print(self.openinfo)
+        self.log.info("[PCEP] OPEN INFO " + str(self.peer_addr) + " " + str(self.openinfo))
+        #print(self.openinfo)
         self.send_open(respopen)
 
       # keep alive
@@ -81,11 +83,10 @@ class PcepPcc(threading.Thread):
         self.send_ka()
 
       elif msg_type == PCEP_PCREPORT:
-        print("REPORT")
-        #print(payload)
-        #print(time.time())
+        self.log.info("[PCEP] REPORT " + str(self.peer_addr))
         repinfos = decode_pcep_report(payload)
-        print(repinfos)
+        self.log.info("[PCEP] REPORT INFO " + str(self.peer_addr) + " " + str(repinfos))
+        #print(repinfos)
         for repinfo in repinfos:
           if (repinfo["lsp"]["sync"] == False) and ( repinfo["lsp"]["plsp_id"] == 0): 
             if (self.sync == False):
@@ -108,11 +109,23 @@ class PcepPcc(threading.Thread):
       elif msg_type == PCEP_PCINITIATE:
         pass
       elif msg_type == PCEP_PCERROR:
-        print("PCEP_PCERROR")
-        print(payload)
+        #self.log.info("[PCEP] ERROR " + str(self.peer_addr))
+        self.log.info("[PCEP] ERROR " + str(self.peer_addr) + " " + str(payload))
+        errinfos = decode_pcep_error(payload)
+        if errinfos != None:
+          if "srp" in errinfos.keys():
+            print("send PCEP_PCERROR")
+            ev = {
+              "type": "PCEP_ERROR",
+              "pcc" : self.peer_addr,
+              "info": errinfos
+            }
+            self.event_cb(ev)
+            print("send PCEP_PCERROR")
+        #print(payload)
       else:
-        print("OTHER MSGTYPE")
-        print(msg_type)
+        self.log.info("[PCEP] OTHER MSG " + str(self.peer_addr) + " " + str(msg_type))
+        #print(msg_type)
 
     def send_ka(self):
       # endA
@@ -135,7 +148,7 @@ class PcepPcc(threading.Thread):
       if cmd["type"] == 1: #"JUST SEND":
         self.conn.sendall(cmd["data"])
 
-      elif cmd["type"] == "PATH DELETE": #"JUST SEND":
+      elif cmd["type"] == "PATH DELETE":
         self.log.info("[PATH] PATH DELETE")
         self.log.info("[PATH] " + str(cmd))
         A = build_pcdelete_from_path(cmd)
@@ -144,13 +157,13 @@ class PcepPcc(threading.Thread):
           length = 4 + len(A)
           pcepmsg = struct.pack("!BBH", ver_flags, 12, length) + A
           self.log.info("[PATH] INITIATE(DEL)")
-          print(pcepmsg)
+          #print(pcepmsg)
           self.send_queue.put({
             "type": 1,
             "data": pcepmsg
           })
 
-      elif cmd["type"] == "PATH UPDATE": #"JUST SEND":
+      elif cmd["type"] == "PATH UPDATE": 
         self.log.info("[PATH] PATH UPDATE")
         self.log.info("[PATH] " + str(cmd))
         #print("pcc handleevent")
@@ -159,12 +172,19 @@ class PcepPcc(threading.Thread):
         #srpid = next(self.srpid)
         #A = build_pcinitiate_from_path(cmd,srpid)
         A = build_pcinitiate_from_path(cmd)
+
+        plsp_id = cmd["detail"]["plsp_id"]
+
         if A != None:
           ver_flags = (1 << 5)
           length = 4 + len(A)
-          pcepmsg = struct.pack("!BBH", ver_flags, 12, length) + A
-          self.log.info("[PATH] INITIATE")
-          print(pcepmsg)
+          if plsp_id == 0:
+            pcepmsg = struct.pack("!BBH", ver_flags, 12, length) + A
+            self.log.info("[PATH] INITIATE")
+          else:
+            pcepmsg = struct.pack("!BBH", ver_flags, 11, length) + A
+            self.log.info("[PATH] UPDATE")
+            #print(pcepmsg)
           self.send_queue.put({
             "type": 1,
             "data": pcepmsg

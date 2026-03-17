@@ -32,17 +32,19 @@ def build_srp_object_del(srpid):
     body = struct.pack("!II", flag, srpid)
     return _pcep_obj_header(OBJ_SRP, 1, len(body)) + body
 
-def build_lsp_object(name: str, delegated=True, create=True):
+def build_lsp_object(name: str, delegated=True, create=True, plsp_id=0):
     flags = 0
+    if plsp_id != 0:
     #if delegated:
-    #    flags |= (1 << 0)   # D
+      flags |= (1 << 0)   # D
     #if create:
     #    flags |= (1 << 7)   # C (Initiate / Create 用フラグ扱い)
 
-    plsp_id = 0  # 新規作成時は 0
+    #plsp_id = 0  # 新規作成時は 0
     status = 0
 
-    fixed = struct.pack("!HH", plsp_id, flags)
+    #fixed = struct.pack("!HH", plsp_id, flags)
+    fixed = struct.pack("!HH", ( plsp_id >> 4), ((plsp_id % 16 ) << 12 ) + flags)
 
     # Symbolic Path Name TLV (Type=17)
     name_b = name.encode()
@@ -127,6 +129,9 @@ def build_pcinitiate_from_path(path_update: dict):
     """
     name  = path_update["name"]
     srpid = path_update["detail"]["srpid"]
+    plsp_id = path_update["detail"]["plsp_id"]
+    print("plsp_id")
+    print(plsp_id)
     #print("srpid" + str(srpid))
     if name == '2': # p2mp skip
       return None
@@ -152,9 +157,12 @@ def build_pcinitiate_from_path(path_update: dict):
 
     objs = b""
     objs += build_srp_object(srpid)
-    objs += build_lsp_object(name=name, delegated=True, create=True)
+    objs += build_lsp_object(name=name, delegated=True, create=True, plsp_id=plsp_id)
     objs += build_ero_object_from_path(path_nodes)
-    #objs += build_bandwidth_object(path_update["detail"].get("bw", 0))
+    print("BWWWWWW")
+    print(path_update["detail"]["detail"].get("bw", 0))
+    print(path_update["detail"])
+    objs += build_bandwidth_object(path_update["detail"].get("bw", 0))
 
     return objs
 
