@@ -17,10 +17,10 @@ class PcepServer(threading.Thread):
       if ( ev["diff"]["type"] == DiffType.DEL ): # Just Del
         self.peer_config.pop(ev["diff"]["id"])
         self.manager.stoppcc(ev["diff"]["id"])
-        print(self.peer_config)
+        #print(self.peer_config)
       elif ( ev["diff"]["type"] == DiffType.ADD ):
         self.peer_config[ev["diff"]["id"]] = ev["diff"]["new"] 
-        print(self.peer_config)
+        #print(self.peer_config)
       
 
     def register_main_callback(self, cb):

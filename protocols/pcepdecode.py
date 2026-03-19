@@ -118,7 +118,7 @@ TLV_LSP_NAME   = 17   # Symbolic Path Name
 TLV_SRP_ID     = 20   # SRP-ID TLV (ベンダ実装により異なる場合あり)
 
 def decode_pcep_error(payload: bytes):
-    print("pcep error")
+    #print("pcep error")
     off = 0
     resp = {}
     res = None

@@ -156,7 +156,7 @@ class GraphManager:
           self.Gc_t[cid] = ev_time
 
     elif t == "NWSYNC":
-      print("NWSYNCW")
+      #print("NWSYNCW")
       self.snap_G_base_t  = self.G_base_t
       self.snap_Gc        = copy.deepcopy(self.Gc)
       self.snap_Gc_t      = self.Gc_t.copy()

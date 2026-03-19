@@ -71,9 +71,9 @@ def build_lsp_object_del(name: str, delegated=True, create=True, plsp_id=0):
     status = 0
 
     fixed = struct.pack("!HH", ( plsp_id >> 4), ((plsp_id % 16 ) << 12 ) + flags)
-    print("000000000000000000000000000000000000000")
-    print(plsp_id)
-    print(fixed)
+    #print("000000000000000000000000000000000000000")
+    #print(plsp_id)
+    #print(fixed)
 
 
     # Symbolic Path Name TLV (Type=17)
@@ -96,7 +96,7 @@ def build_ero_object_from_path(path_nodes):
     """
     subs = b""
     for ip in path_nodes:
-        print(ip)
+        #print(ip)
         subs += struct.pack("!BB", 1, 8) + socket.inet_aton(ip[3]) + struct.pack("!BB", 32, 0)  # IPv4 address subobject
 
     return _pcep_obj_header(OBJ_ERO, 1, len(subs)) + subs
@@ -112,9 +112,9 @@ def build_pcdelete_from_path(path_update: dict):
     plsp_id = path_update["detail"]["lsp"]["plsp_id"]
     srpid   = path_update["srpid"]
 
-    print("del path_update")
-    print(path_update)
-    print(plsp_id)
+    #print("del path_update")
+    #print(path_update)
+    #print(plsp_id)
 
     objs = b""
     objs += build_srp_object_del(srpid)
@@ -130,8 +130,8 @@ def build_pcinitiate_from_path(path_update: dict):
     name  = path_update["name"]
     srpid = path_update["detail"]["srpid"]
     plsp_id = path_update["detail"]["plsp_id"]
-    print("plsp_id")
-    print(plsp_id)
+    #print("plsp_id")
+    #print(plsp_id)
     #print("srpid" + str(srpid))
     if name == '2': # p2mp skip
       return None
@@ -153,15 +153,15 @@ def build_pcinitiate_from_path(path_update: dict):
     #print(detail[src][dst]["links"])
     path_nodes = detail[src][dst][0]["links"]
     #print("HOGE")
-    print(path_nodes)
+    #print(path_nodes)
 
     objs = b""
     objs += build_srp_object(srpid)
     objs += build_lsp_object(name=name, delegated=True, create=True, plsp_id=plsp_id)
     objs += build_ero_object_from_path(path_nodes)
-    print("BWWWWWW")
-    print(path_update["detail"]["detail"].get("bw", 0))
-    print(path_update["detail"])
+    #print("BWWWWWW")
+    #print(path_update["detail"]["detail"].get("bw", 0))
+    #print(path_update["detail"])
     objs += build_bandwidth_object(path_update["detail"].get("bw", 0))
 
     return objs

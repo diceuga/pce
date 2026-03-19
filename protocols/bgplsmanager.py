@@ -7,10 +7,10 @@ import json
 from protocols.bgplsdecode import decode_bgp_update
 from protocols.bgplspeer import BgplsPeer
 import logging
-log = logging.getLogger("bgpls")
+#log = logging.getLogger("bgpls")
 
 class BgplsManager:
-    def __init__(self):
+    def __init__(self, log):
       self.peers = {}
       self.peer_state = {}
       self.peer_eor = set()
@@ -22,6 +22,8 @@ class BgplsManager:
       self.main_cb = None
       self.global_state = "INIT"
 
+      self.log = log
+
     def stoppeer(self, peer):
       if peer in  self.peers:
          self.peers[peer].running = False
@@ -30,7 +32,7 @@ class BgplsManager:
       self.main_cb = cb
 
     def register_peer(self, peer_addr, sock, router_id, peer):
-      peer_obj = BgplsPeer(peer_addr, sock, self.on_peer_event, router_id)
+      peer_obj = BgplsPeer(peer_addr, sock, self.on_peer_event, router_id, self.log)
       self.peers[peer_addr] = {
         "cfg": peer,
         "obj": peer_obj
@@ -222,14 +224,13 @@ class BgplsManager:
         self._update_global_state()
 
     def _handle_peer_down(self, peer):
-        # implicit withdraw は後で
+        # implicit withdraw later
 
-        print(self.routes)
-       
+        #print(self.routes)
         for r in list(self.routes.keys()):
-          print ("peer down")
-          print (r)
-          print (peer)
+          #print ("peer down")
+          #print (r)
+          #print (peer)
           route = self.routes.get(r)
           route["paths"].pop(peer, None)
           if not route["paths"]:

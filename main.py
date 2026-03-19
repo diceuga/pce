@@ -44,7 +44,7 @@ def main():
   G_PM.attach_GM(G_GM)
 
   # BGP START
-  bgp = BgpServer(G_CM.BGPLSINFO)
+  bgp = BgpServer(G_CM.BGPLSINFO, G_LOG)
   bgp.register_main_callback(G_GM.on_bgpls_event)
   #G_CM.attach_BGP(bgp.bgpmanager)
   G_CM.attach_bgpserver(bgp)

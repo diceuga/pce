@@ -39,11 +39,6 @@ class ConfigManager:
     self.CONFIG_PATH = os.path.join(self.BASE_DIR, "etc", "config.json")
     #print(str(BASE_DIR))
 
-    # Q
-    #self.G_queue    = None
-    #self.C_queue    = None
-    #self.C_cnt      = None
-
     # M
     self.PM         = None
     self.GM         = None
@@ -63,6 +58,7 @@ class ConfigManager:
     self.CONFIGTIME = 0
 
     self.pcepserver = None
+    self.bgpserver  = None
 
     # init load
     self.NODEINFO,  self.NODETIME   = self.load_node_config()
@@ -72,44 +68,29 @@ class ConfigManager:
     self.PCEPINFO,  _               = self.load_pcep_config()
 
     # PATH NORM
-    #print(self.PATHINFO)
     for name, raw in self.PATHINFO.items():
       self.N_PATHINFO[name] = self.normalize_pathdef(name, raw)
-    #print(self.N_PATHINFO)
 
     # thread
     self.wp = threading.Thread(
       target= self.path_file_watcher, daemon=True,
-      #args=(G_C_Queue, G_PATHINFO,  pathmtime,  "path",  G_PATHINFO ), daemon=True,
     )
     self.wp.start()
 
     self.wn = threading.Thread(
       target= self.node_file_watcher, daemon=True,
-      #args=(G_C_Queue, G_PATHINFO,  pathmtime,  "path",  G_PATHINFO ), daemon=True,
     )
     self.wn.start()
 
     self.wc = threading.Thread(
       target= self.const_file_watcher, daemon=True,
-      #args=(G_C_Queue, G_PATHINFO,  pathmtime,  "path",  G_PATHINFO ), daemon=True,
     )
     self.wc.start()
 
     self.wco = threading.Thread(
       target= self.config_file_watcher, daemon=True,
-      #args=(G_C_Queue, G_PATHINFO,  pathmtime,  "path",  G_PATHINFO ), daemon=True,
     )
     self.wco.start()
-
-  #def attach_g_q(self, Q):
-  #  self.G_queue    = Q
-
-  #def attach_c_q(self, Q):
-  #  self.C_queue    = Q
-
-  #def attach_c_cnt(self, cb):
-  #  self.C_cnt      = cb
 
   def attach_PM(self, PM):
     self.PM = PM
@@ -124,7 +105,7 @@ class ConfigManager:
       wk = json.load(f)
       return wk.get("bgpls",{}), mtime
 
-  # bgpls
+  # pcep
   def load_pcep_config(self):
     mtime = os.path.getmtime(self.CONFIG_PATH)
     with open(self.CONFIG_PATH) as f:
@@ -145,15 +126,13 @@ class ConfigManager:
       return None
 
   def get_all_const(self):
-    #wk = []
-    #for key in self.N_PATHINFO.keys():
-    #  wk.append(self.N_PATHINFO[key])
     return self.CONSTINFO
 
   def attach_pcepserver(self,pcep):
     self.pcepserver = pcep
+
   def attach_bgpserver(self, bgp):
-    self.bgpserver = bgp
+    self.bgpserver  = bgp
 
   def config_file_watcher(self):
 
@@ -163,8 +142,7 @@ class ConfigManager:
         wkdata1, _ = self.load_bgpls_config()
         wkdata2, _ = self.load_pcep_config()
 
-        #diffs1 = diff_dict(self.BGPLSINFO["peers"], wkdata1["peers"])
-        diffs1 = []
+        diffs1 = diff_dict(self.BGPLSINFO["peers"], wkdata1["peers"])
         diffs2 = diff_dict(self.PCEPINFO["pccs"], wkdata2["pccs"])
         self.BGPLSINFO = wkdata1
         self.PCEPINFO  = wkdata2
@@ -258,12 +236,7 @@ class ConfigManager:
         
         self.N_PATHINFO = wkpathinfo
 
-        #print(self.PATHINFO)
-        #print(self.PATHINFO)
-
         for d in diffs:
-          #pri = (100, self.C_cnt())
-          #self.C_queue.put((pri,{
           pri = (100, self.PM.get_C_cnt())
           self.PM.C_Queue.put((pri,{
               "type": "PATH_CONFIG",

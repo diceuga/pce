@@ -245,8 +245,9 @@ def decode_bgp_ls_nlri(buf: bytes, off: int):
     nlri["detail"] = decode_nlri_detail(nlri_type, protocol_id, tlvs)
 
     if ( tlvs != [] ):
-      print("##### remain TLVs")
-      print(tlvs)
+      #print("##### remain TLVs")
+      log.info("[BGPLS] remain TLVs : " + str(tlvs))
+      #print(tlvs)
 
     return nlri, off
 
@@ -369,7 +370,8 @@ def decode_ospf_nlri(nlri_type: int, tlvs):
          info["ip_reachability_info"]["prefix"] = socket.inet_ntoa(pr)
          tlvs.pop(i)
        else:
-         print("unknown bgpls tlv:" +  t)
+         #print("unknown bgpls tlv:" +  t)
+         log.info("[BGPLS] unknown bgpls tlv:" +  str(t))
          i += 1
 
     return info

@@ -52,8 +52,7 @@ class PcepManager:
         elif t == "PCEP_ERROR":
           self._emit_main(ev)
         else:
-          print("event!!")
-          print(t)
+          self.log.info("[PCEP] unknow event" + str(t))
 
     def _handle_report(self, peer, raw):
         lsp = decode_pcrpt(raw)

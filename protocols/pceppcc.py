@@ -24,7 +24,6 @@ PCEP_PCERROR    = 6
 PCEP_PCREPORT   = 10
 PCEP_PCINITIATE = 11
 
-
 class PcepPcc(threading.Thread):
     def __init__(self, peer_addr, sock, event_cb,log):
         super().__init__(daemon=True)
@@ -74,7 +73,7 @@ class PcepPcc(threading.Thread):
         self.log.info("[PCEP] OPEN " + str(self.peer_addr))
         self.openinfo, respopen = decode_pcep_open(payload)
         self.hold_time = self.openinfo.get("deadtimer",120)
-        self.log.info("[PCEP] OPEN INFO " + str(self.peer_addr) + " " + str(self.openinfo))
+        #self.log.info("[PCEP] OPEN INFO " + str(self.peer_addr) + " " + str(self.openinfo))
         #print(self.openinfo)
         self.send_open(respopen)
 
@@ -85,7 +84,7 @@ class PcepPcc(threading.Thread):
       elif msg_type == PCEP_PCREPORT:
         self.log.info("[PCEP] REPORT " + str(self.peer_addr))
         repinfos = decode_pcep_report(payload)
-        self.log.info("[PCEP] REPORT INFO " + str(self.peer_addr) + " " + str(repinfos))
+        #self.log.info("[PCEP] REPORT INFO " + str(self.peer_addr) + " " + str(repinfos))
         #print(repinfos)
         for repinfo in repinfos:
           if (repinfo["lsp"]["sync"] == False) and ( repinfo["lsp"]["plsp_id"] == 0): 
@@ -114,14 +113,14 @@ class PcepPcc(threading.Thread):
         errinfos = decode_pcep_error(payload)
         if errinfos != None:
           if "srp" in errinfos.keys():
-            print("send PCEP_PCERROR")
+            #print("send PCEP_PCERROR")
             ev = {
               "type": "PCEP_ERROR",
               "pcc" : self.peer_addr,
               "info": errinfos
             }
             self.event_cb(ev)
-            print("send PCEP_PCERROR")
+            #print("send PCEP_PCERROR")
         #print(payload)
       else:
         self.log.info("[PCEP] OTHER MSG " + str(self.peer_addr) + " " + str(msg_type))
@@ -204,7 +203,7 @@ class PcepPcc(threading.Thread):
 
         except Exception as e:
             self.running = False 
-            print(f"[PCEP] peer {self.peer_addr} send error: {e}")
+            self.log.info(f"[PCEP] peer {self.peer_addr} send error: {e}")
             traceback.print_exc()
     
     def run(self):
@@ -225,7 +224,8 @@ class PcepPcc(threading.Thread):
             self._handle_message(msg_type, payload)
             
         except Exception as e:
-          print(f"[PCEP] peer {self.peer_addr} error: {e}")
+          self.log.info(f"[PCEP] peer {self.peer_addr} error: {e}")
+          #print(f"[PCEP] peer {self.peer_addr} error: {e}")
           traceback.print_exc()
 
         finally:

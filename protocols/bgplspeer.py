@@ -14,7 +14,7 @@ ATTR_MP_REACH = 14
 
 class BgplsPeer(threading.Thread):
 
-    def __init__(self, peer_addr, sock, event_cb, router_id):
+    def __init__(self, peer_addr, sock, event_cb, router_id, log):
       super().__init__(daemon=True)
       self.peer_addr = peer_addr
       self.peer_ip = peer_addr
@@ -23,6 +23,7 @@ class BgplsPeer(threading.Thread):
       self.router_id = socket.inet_aton(router_id)
       self.running = True
       self.hold_time = 90
+      self.log = log
 
     def _hold_timer(self):
       while self.running:
@@ -102,7 +103,8 @@ class BgplsPeer(threading.Thread):
           self._handle_message(msg_type, payload)
 
       except Exception as e:
-        print(f"[BGPLS] peer {self.peer_ip} error: {e}")
+        #print(f"[BGPLS] peer {self.peer_ip} error: {e}")
+        self.log.info(f"[BGPLS] peer {self.peer_ip} error: {e}")
         traceback.print_exc()
 
       finally:
@@ -177,7 +179,7 @@ class BgplsPeer(threading.Thread):
             pos += length
 
       except Exception as e:
-        print(f"[BGPLS] EOR parse error from {self.peer_ip}: {e}")
+        self.log.info(f"[BGPLS] EOR parse error from {self.peer_ip}: {e}")
 
       return False
 
