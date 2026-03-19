@@ -217,44 +217,47 @@ class PathManager:
                     "comptype": p,
                   }))
 
-            if wk_end == True:  break
+        if wk_end == True:  break
 
-            # force recalc
-            if self.PATH_n[k]["c"]["w_sts"] == "Init":
-              calctime = int(self.PATH_n[k]["w"]["calctime"])
-              if now - calctime > 300000:
-                wk_end = True
-                self.log.info("[PATH] force recalc :" + str(k))
-                #self.PATH_n[k]["c"]["w_sts"] = ""
-                qpri = ( 100, self.get_C_cnt())
-                self.C_Queue.put((qpri,{
-                  "type": "RECOMPUTEX2",
-                  "comptype": p,
-                }))
+        # force recalc
+        if self.PATH_n[k]["c"]["w_sts"] in [ "Init"]:
+          calctime = int(self.PATH_n[k]["w"]["calctime"])
+          #print(calctime)
+          #print(now)
+          if now - calctime > 60000:
+            wk_end = True
+            self.log.info("[PATH] force recalc :" + str(k))
+            #self.PATH_n[k]["c"]["w_sts"] = ""
+            qpri = ( 100, self.get_C_cnt())
+            self.C_Queue.put((qpri,{
+              "type": "RECOMPUTEX2",
+              "comptype": k,
+            }))
 
-            if wk_end == True:  break
+        if wk_end == True:  break
 
-            # time opt
-            wk_pathdef = self.PATH_n[k]["c"]["pathdef"]
-            calctime   = 0
-            opttime    = 0
-            if self.PATH_n[k]["c"]["d_sts"] == 2:
-              calctime = int(self.PATH_n[k]["d"]["updatetime"])
-              opttime  = wk_pathdef.optm
-            else:
-              if self.PATH_n[k]["c"]["w_sts"] != "":
-                calctime = int(self.PATH_n[k]["w"]["calctime"])
-                opttime  = 10
+        # time opt
+        wk_pathdef = self.PATH_n[k]["c"]["pathdef"]
+        calctime   = 0
+        opttime    = 0
+        if self.PATH_n[k]["c"]["d_sts"] == 2:
+          calctime = int(self.PATH_n[k]["d"]["updatetime"])
+          opttime  = wk_pathdef.optm
+        else:
+          if self.PATH_n[k]["c"]["w_sts"] != "":
+            calctime = int(self.PATH_n[k]["w"]["calctime"])
+            opttime  = 10
 
-            if opttime != 0:
-              opttime = max(opttime * 1000, 10000)
-              if now - calctime > opttime:
-                self.log.info("[PATH] timer optm :" + str(k))
-                qpri = ( 100, self.get_C_cnt())
-                self.C_Queue.put((qpri,{
-                  "type": "RECOMPUTEX",
-                  "comptype": k,
-                }))
+        if opttime != 0:
+          opttime = max(opttime * 1000, 10000)
+          if now - calctime > opttime:
+            if self.PATH_n[k]["c"]["w_sts"] != "Init":
+              self.log.info("[PATH] timer optm :" + str(k))
+              qpri = ( 100, self.get_C_cnt())
+              self.C_Queue.put((qpri,{
+                "type": "RECOMPUTEX",
+                "comptype": k,
+              }))
 
               
 
@@ -295,6 +298,8 @@ class PathManager:
             if self.PCC[s]["state"] != "sync":
               wknew =False 
               break
+          else:
+            wknew =False 
 
         if wknew == False:
           self.log.debug("[PATH] optimize new skip due to pcc state: " + str(pd.name))
@@ -601,9 +606,10 @@ class PathManager:
     #  self.log.info("[COMPUTE] skip there is other candidate")
     #  return
     if pid in self.PATH_n.keys():
-      if self.PATH_n[pid]["c"]["w_sts"] == "Init":
-        self.log.info("[PATH] skip there is other candidate(d status = init")
-        return
+      if force == False:
+        if self.PATH_n[pid]["c"]["w_sts"] == "Init":
+          self.log.info("[PATH] skip there is other candidate(d status = init")
+          return
 
     #cpathinfo  = None
     cbw        = 0
