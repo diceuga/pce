@@ -492,19 +492,27 @@ class PathManager:
   # from pcep rep
   def update_path_d(self, p, info, pcc):
 
+    self.log.info("[PATH] Report Info: " + str(info))
+
     # sync case
     if p not in self.PATH_n.keys():
       self.PATH_n[p] = copy.deepcopy(self.new_p_ent)
 
-    srpid  = info["srp"]["srpid"]
-    remove = info["lsp"]["remove"]
+    srpid    = info["srp"]["srpid"]
+    remove   = info["lsp"]["remove"]
+    delegete = info["lsp"]["delegete"]
+    create   = info["lsp"]["create"]
+
+    # delegate / create flg
+    if delegete == False and create == True:
+      self.log.info("[PATH] create:1 / delegete:0 mismatch")
+      return
 
     # srpid check
     if srpid == 0:
-      if srpid == 0:
-        if remove == True:
-          self.log.info("[PATH] delete with 0 srpid Ignore")
-          return
+      if remove == True and create == True:
+        self.log.info("[PATH] create path delete with 0 srpid Ignore")
+        return
     else:
       if ( self.PATH_n[p]["c"]["w_sts"] != "Init"
         or  self.PATH_n[p]["w"]["pathinfo"]["srpid"] != srpid):
