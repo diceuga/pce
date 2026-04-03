@@ -78,12 +78,15 @@ class PathManager:
     else:
       self.log.error("[PATH] unknown MSG:" + str(t))
 
-  def delete_path_for_pcc(pcc):
+  def delete_path_for_pcc(self, pcc):
     for p in self.PATH_n.keys():
       if pcc == self.PATH_n[p]["c"]["src"]:
         self.PATH_n.pop(p)
+        self.delete_wkbw_base_p(p)
+        self.delete_bw_base_p(p)
 
-  def delete_p_from_d_for_onepcc(pcc):
+
+  def delete_p_from_d_for_onepcc(self,pcc):
     for p in list(self.PATH_d.keys()):
       if pcc == self.PATH_d[p]["pcc"]:
         qpri = ( 100, self.get_C_cnt())
@@ -187,6 +190,8 @@ class PathManager:
       for k in list(self.PATH_n.keys()):
         #print(self.PATH_n[k])
 
+        self.log.info("[PATH] opt for " + str(k))
+
         wk_end = False
         if self.PATH_n[k]["c"]["d_sts"] != "":
             
@@ -206,7 +211,7 @@ class PathManager:
             if wk_end == True:  break
 
             # link_set    
-            if self.PATH_n[k]["c"]["d_sts"] == "2":
+            if self.PATH_n[k]["c"]["d_sts"] in [ 1, 2]:
               if self.PATH_n[k]["d"]["link_set"] == None:
                 wk_end = True
                 if self.PATH_n[k]["c"]["w_sts"] != "Init":
@@ -240,19 +245,22 @@ class PathManager:
         wk_pathdef = self.PATH_n[k]["c"]["pathdef"]
         calctime   = 0
         opttime    = 0
-        if self.PATH_n[k]["c"]["d_sts"] == 2:
+        if self.PATH_n[k]["c"]["d_sts"] in [1, 2]:
           calctime = int(self.PATH_n[k]["d"]["updatetime"])
           opttime  = wk_pathdef.optm
         else:
           if self.PATH_n[k]["c"]["w_sts"] != "":
             calctime = int(self.PATH_n[k]["w"]["calctime"])
-            opttime  = 10
+            #self.log.info("[PATH] calctime:" + str(calctime))
+            opttime  = 30
 
         if opttime != 0:
           opttime = max(opttime * 1000, 10000)
           if now - calctime > opttime:
             if self.PATH_n[k]["c"]["w_sts"] != "Init":
               self.log.info("[PATH] timer optm :" + str(k))
+              self.log.info("[PATH] calctime:" + str(calctime))
+              self.log.info("[PATH] now:"      + str(now))
               qpri = ( 100, self.get_C_cnt())
               self.C_Queue.put((qpri,{
                 "type": "RECOMPUTEX",
@@ -263,29 +271,36 @@ class PathManager:
 
       # BW check
       #-----------------------------------------
-      #allbwinfo   = self.BM.getallbw()
-      #cpath       = set()
-      #for lk in list(allbwinfo.keys()):
-      #  v = allbwinfo.get(lk)
-      #  if v!= None:
-      #    reducebw = v["sumpbw"] - v["maxbw"]
-      #    #reducebw = 5 # debug
-      #    if ( reducebw > 0  ):
-      #      wkbw = 0
-      #      for pd in sorted_pathdef2:
-      #        if pd.name in self.PATH_d.keys():
-      #          if self.PATH_d[pd.name]["bw"] > 0:
-      #            if lk in self.PATH_d[pd.name]["link_set"]:
-      #              cpath.add(pd.name)
-      #              wkbw += self.PATH_d[pd.name]["bw"]
-      #              if wkbw > reducebw:
-      #                break
-      #for p in cpath:
-      #  qpri = ( 100, self.get_C_cnt())
-      #  self.C_Queue.put((qpri,{
-      #      "type": "RECOMPUTEX",
-      #      "comptype": p,
-      #  }))
+      allbwinfo   = self.BM.getallbw()
+      cpath       = set()
+      for lk in list(allbwinfo.keys()):
+        v = allbwinfo.get(lk)
+        if v!= None:
+          reducebw = v["sumpbw"] - v["maxbw"]
+          #reducebw = 5 # debug
+          if ( reducebw > 0  ):
+            wkbw = 0
+            for pd in sorted_pathdef2:
+              pass
+              if pd.name in self.PATH_n.keys():
+                if self.PATH_d[pd.name]["c"]["d_sts"] in [ 1,2 ]:
+                  if lk in self.PATH_n[pd.name]["d"]["link_set"]:
+                    cpath.add(pd.name)
+                    wkbw += self.PATH_n[pd.name]["d"]["pathinfo"]["lsp"]["bandwidth"]
+                else:
+                  if self.PATH_n[pid]["c"]["w_sts"] != "":
+                    if lk in self.PATH_n[pd.name]["w"]["link_set"]:
+                      cpath.add(pd.name)
+                      wkbw += self.PATH_n[pd.name]["w"]["pathinfo"]["bw"]
+                if wkbw > reducebw:
+                  break
+
+      for p in cpath:
+        qpri = ( 100, self.get_C_cnt())
+        self.C_Queue.put((qpri,{
+            "type": "RECOMPUTEX2",
+            "comptype": p,
+        }))
 
       #-----------------------------------------
       # New 
@@ -306,7 +321,7 @@ class PathManager:
           continue
 
         if pd.name in self.PATH_n.keys():
-          if self.PATH_n[pd.name]["c"]["d_sts"] == 2:
+          if self.PATH_n[pd.name]["c"]["d_sts"] in [ 1, 2]:
             wknew = False
           elif  self.PATH_n[pd.name]["c"]["w_sts"] != "":
             wknew = False
@@ -471,6 +486,10 @@ class PathManager:
 
     if wkflg == True:
       self.PATH_n[p]["d"]["pathinfo"]["link_set"] = wk
+      if self.PATH_n[p]["c"]["d_sts"] in [ 1, 2 ]:
+        if self.PATH_n[p]["d"]["link_set"] != None:
+          self.delete_bw_base_p(p)
+          self.add_bw_base_p(p)
     else:
       qpri = ( 100, self.get_C_cnt())
       self.C_Queue.put((qpri,{
@@ -488,6 +507,17 @@ class PathManager:
     if p in list(self.PATH_n.keys()):
       for lk in self.PATH_n[p]["w"]["link_set"]:
         self.BM.delwkpbw(lk,p)
+
+  def delete_bw_base_p(self, p):
+    if p in list(self.PATH_n.keys()):
+      for lk in self.PATH_n[p]["d"]["link_set"]:
+        self.BM.delpbw(lk,p)
+
+  def add_bw_base_p(self, p):
+    if p in list(self.PATH_n.keys()):
+      for lk in self.PATH_n[p]["d"]["link_set"]:
+        #print(self.PATH_n[p]["d"])
+        self.BM.addpbw(lk, self.PATH_n[p]["d"]["pathinfo"]["lsp"]["bandwidth"], p)
 
   # from pcep rep
   def update_path_d(self, p, info, pcc):
@@ -526,7 +556,8 @@ class PathManager:
     # Remove
     if remove == True:
       self.delete_wkbw_base_p(p)
-      self.BM.delwkpbw(lk,p)
+      self.delete_bw_base_p(p)
+      #self.BM.delwkpbw(lk,p)
       self.PATH_n.pop(p)
       self.log.info("[PATH] path delete: " + str(p))
     else:
@@ -552,8 +583,15 @@ class PathManager:
 
       if srpid != 0:
         self.PATH_n[p]["c"]["w_sts"] = "Done"
-        for lk in self.PATH_n[p]["w"]["link_set"]:
-          self.BM.delwkpbw(lk,p)
+        self.delete_wkbw_base_p(p)
+
+      if self.PATH_n[p]["c"]["d_sts"] in [ 1, 2 ]:
+        if self.PATH_n[p]["d"]["link_set"] != None:
+          self.delete_bw_base_p(p)
+          self.add_bw_base_p(p)
+        
+        #for lk in self.PATH_n[p]["w"]["link_set"]:
+        #  self.BM.delwkpbw(lk,p)
 
   def delete_p_from_both(self, p): # force delete
     if p in list(self.PATH_d.keys()):
@@ -582,6 +620,7 @@ class PathManager:
   #        for lk in self.PATH_d[p]["link_set"]:
   #          self.BM.delpbw(lk,p)
   #        self.PATH_d.pop(p)
+
   def delete_p_from_d(self, p):
     if p in list(self.PATH_d.keys()):
       self.PATH_d.pop(p)
@@ -631,7 +670,7 @@ class PathManager:
 
       if self.PATH_n[pid]["c"]["d_sts"] != "": # any
         cplsp_id  = int(self.PATH_n[pid]["d"]["pathinfo"]["lsp"]["plsp_id"])
-      if self.PATH_n[pid]["c"]["d_sts"] == 2: # up
+      if self.PATH_n[pid]["c"]["d_sts"] in  [1,2] : # up
         cbw       = int(self.PATH_n[pid]["d"]["pathinfo"]["lsp"]["bandwidth"])
         clink_set = self.PATH_n[pid]["d"]["link_set"]
       elif self.PATH_n[pid]["c"]["w_sts"] != "":

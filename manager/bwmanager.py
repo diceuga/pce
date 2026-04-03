@@ -23,15 +23,17 @@ class BWManager:
 
   def delpbw(self, lkey, pname):
     if lkey in self.BWdb.keys():
-      wkbw = self.BWdb[lkey]["paths"][pname]
-      self.BWdb[lkey]["paths"].pop(pname)
-      self.BWdb[lkey]["sumpbw"] -= wkbw
+      if pname in self.BWdb[lkey]["paths"].keys():
+        wkbw = self.BWdb[lkey]["paths"][pname]
+        self.BWdb[lkey]["paths"].pop(pname)
+        self.BWdb[lkey]["sumpbw"] -= wkbw
 
   def delwkpbw(self, lkey, pname):
     if lkey in self.BWdb.keys():
-      wkbw = self.BWdb[lkey]["wkpaths"][pname]
-      self.BWdb[lkey]["wkpaths"].pop(pname)
-      self.BWdb[lkey]["sumwkpbw"] -= wkbw
+      if pname in self.BWdb[lkey]["wkpaths"].keys():
+        wkbw = self.BWdb[lkey]["wkpaths"][pname]
+        self.BWdb[lkey]["wkpaths"].pop(pname)
+        self.BWdb[lkey]["sumwkpbw"] -= wkbw
 
   def updbw(self, lkey, bw, mbw):
     if lkey not in self.BWdb.keys():
